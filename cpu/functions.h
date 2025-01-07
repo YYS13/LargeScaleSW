@@ -25,6 +25,10 @@ void initialize_sequence(char **seq, int len);
 
 Cell** initialize_matrix(char *reference, char *query);
 
+void fill_vector(int *vector, int value, int length);
+
+void reverseString(char *str);
+
 void local_alignment(Cell **H, int *E, int *F, char *reference, char *query, Result *result);
 
 void traceback(Cell **H, Result *result, char *reference, char *query);

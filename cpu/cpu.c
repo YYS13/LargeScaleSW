@@ -11,8 +11,9 @@ int main(){
     srand((unsigned int)time(NULL));
     //initialize sequence
     initialize_sequence(&reference, 30);
-    initialize_sequence(&query, 20);
+    initialize_sequence(&query, 12);
 
+    
 
     //initialize matrix
     Cell **H = initialize_matrix(reference, query);
@@ -22,9 +23,9 @@ int main(){
     int *F = malloc(sizeof(int) * (strlen(query) + 1));
 
     //fill element with negative infinity
-    memset(E, -100, sizeof(int) * (strlen(reference) + 1));
-    memset(F, -100, sizeof(int) * (strlen(query) + 1));
-
+    fill_vector(E, INT_MIN - EXTEND_GAP, (strlen(reference) + 1));
+    fill_vector(F, INT_MIN - EXTEND_GAP, (strlen(query) + 1));
+    printf("%d\n", E[1]);
 
     Result result;
     result.maxScore = INT_MIN;

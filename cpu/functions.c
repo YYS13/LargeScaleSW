@@ -41,6 +41,12 @@ Cell** initialize_matrix(char *reference, char *query){
     return matrix;
 }
 
+void fill_vector(int *vector, int value, int length){
+    for(int i = 0; i < length; i++){
+        vector[i] = value;
+    }
+}
+
 
 void reverseString(char *str) {
     int len = strlen(str);
@@ -57,6 +63,10 @@ void local_alignment(Cell **H, int *E, int *F, char *reference, char *query, Res
     for(int i = 1; i <= m; i++){
         for(int j = 1; j <= n; j++){
             //計算來自三個方向的值
+            if(i == 1 && j == 1){
+                printf("E[j] = %d, EXTEND_GAP = %d, E[j] + EXTEND_GAP = %d\n", E[j], EXTEND_GAP, E[j] + EXTEND_GAP);
+                printf("F[i] = %d, EXTEND_GAP = %d, F[i] + EXTEND_GAP = %d\n", F[i], EXTEND_GAP, F[i] + EXTEND_GAP);
+            }
             E[j] = (E[j] + EXTEND_GAP > H[i-1][j].score + OPEN_GAP) ? E[j] + EXTEND_GAP: H[i-1][j].score + OPEN_GAP;
             F[i] = (F[i] + EXTEND_GAP > H[i][j-1].score + OPEN_GAP) ? F[i] + EXTEND_GAP : H[i][j-1].score + OPEN_GAP;
             int match = (query[j-1] == reference[i-1])? MATCH : MISMATCH;
@@ -140,7 +150,7 @@ void traceback(Cell **H, Result *result, char *reference, char *query){
 void printMatrix(Cell **matrix, int rows, int cols) {
     for (int i = 0; i < rows; i++) {  
         for (int j = 0; j < cols; j++) {  
-            printf("%d ", matrix[i][j].score);  
+            printf("%d  ", matrix[i][j].score);  
         }
         printf("\n");
     }
