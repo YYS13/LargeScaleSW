@@ -1,2 +1,5 @@
 # LargeScaleSW
-## Develope SW(Smith-Waterman) algorithm in CPU & GPU version to caculate mtDNA & nDNA alignment. 
+## Develope SW(Smith-Waterman) algorithm in CPU & GPU version to caculate mtDNA & nDNA alignment.
+
+
+## How to use
