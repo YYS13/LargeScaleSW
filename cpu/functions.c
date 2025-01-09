@@ -63,13 +63,9 @@ void local_alignment(Cell **H, int *E, int *F, char *reference, char *query, Res
     for(int i = 1; i <= m; i++){
         for(int j = 1; j <= n; j++){
             //計算來自三個方向的值
-            if(i == 1 && j == 1){
-                printf("E[j] = %d, EXTEND_GAP = %d, E[j] + EXTEND_GAP = %d\n", E[j], EXTEND_GAP, E[j] + EXTEND_GAP);
-                printf("F[i] = %d, EXTEND_GAP = %d, F[i] + EXTEND_GAP = %d\n", F[i], EXTEND_GAP, F[i] + EXTEND_GAP);
-            }
             E[j] = (E[j] + EXTEND_GAP > H[i-1][j].score + OPEN_GAP) ? E[j] + EXTEND_GAP: H[i-1][j].score + OPEN_GAP;
             F[i] = (F[i] + EXTEND_GAP > H[i][j-1].score + OPEN_GAP) ? F[i] + EXTEND_GAP : H[i][j-1].score + OPEN_GAP;
-            int match = (query[j-1] == reference[i-1])? MATCH : MISMATCH;
+            int match = (query[i-1] == reference[j-1])? MATCH : MISMATCH;
             H[i][j].score = H[i-1][j-1].score + match;
             /*
                 H[i][j] = max{up, left, dig, 0}
@@ -106,8 +102,8 @@ void local_alignment(Cell **H, int *E, int *F, char *reference, char *query, Res
 
 void traceback(Cell **H, Result *result, char *reference, char *query){
     
-    char * ref = malloc(sizeof(char) * strlen(query));
-    char * q = malloc(sizeof(char) * strlen(query));
+    char * ref = malloc(sizeof(char) * (strlen(query) + strlen(reference)));
+    char * q = malloc(sizeof(char) * (strlen(query) + strlen(reference)));
     
     int strIdx = 0;
     int i = result -> row;

@@ -11,7 +11,7 @@ int main(){
     srand((unsigned int)time(NULL));
     //initialize sequence
     initialize_sequence(&reference, 30);
-    initialize_sequence(&query, 12);
+    initialize_sequence(&query, 20);
 
     
 
