@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
-#include <string.h>
 #include <math.h>
 
 #include "functions.c"
@@ -11,33 +8,33 @@ int main(){
     char *reference, *query;
     srand((unsigned int)time(NULL));
     //initialize sequence
-    initialize_sequence(&reference,  (long long)(3.2 * pow(2, 30)));
-    initialize_sequence(&query, 16569);
+    initialize_sequence(&reference, 30);
+    initialize_sequence(&query, 20);
 
     
 
     //initialize matrix
-    //Cell **H = initialize_matrix(reference, query);
+    Cell **H = initialize_matrix(reference, query);
 
     //initialize E & F
-    //int *E = malloc(sizeof(int) * (strlen(reference) + 1));
-    //int *F = malloc(sizeof(int) * (strlen(query) + 1));
+    int *E = malloc(sizeof(int) * (strlen(reference) + 1));
+    int *F = malloc(sizeof(int) * (strlen(query) + 1));
 
     //fill element with negative infinity
-    //fill_vector(E, INT_MIN - EXTEND_GAP, (strlen(reference) + 1));
-    //fill_vector(F, INT_MIN - EXTEND_GAP, (strlen(query) + 1));
-    //printf("%d\n", E[1]);
+    fill_vector(E, INT_MIN - EXTEND_GAP, (strlen(reference) + 1));
+    fill_vector(F, INT_MIN - EXTEND_GAP, (strlen(query) + 1));
+    printf("%d\n", E[1]);
 
-    //Result result;
-    //result.maxScore = INT_MIN;
+    Result result;
+    result.maxScore = INT_MIN;
 
     //alignment
-    // local_alignment(H, E, F, reference, query, &result);
+    local_alignment(H, E, F, reference, query, &result);
 
-    // printf("reference : %s\n", reference);
-    // printf("query : %s\n", query);
-    // printf("H: \n");
-    // printMatrix(H, strlen(query) + 1, strlen(reference) + 1);
+    printf("reference : %s\n", reference);
+    printf("query : %s\n", query);
+    printf("H: \n");
+    printMatrix(H, strlen(query) + 1, strlen(reference) + 1);
     // printf("\nE: \n");
     // printMatrix(E, strlen(query) + 1, strlen(reference) + 1);
     // printf("\nF: \n");
@@ -45,17 +42,17 @@ int main(){
 
 
     //traceback
-    // traceback(H, &result, reference, query);
+    traceback(H, &result, reference, query);
 
     //free memory space
     free(reference);
     free(query);
-    // for (int i = 0; i <= strlen(query); i++) {
-    //     free(H[i]);
-    // }
-    // free(H);
-    // free(E);
-    // free(F);
+    for (int i = 0; i <= strlen(query); i++) {
+        free(H[i]);
+    }
+    free(H);
+    free(E);
+    free(F);
 
     return 0;
 }

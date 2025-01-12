@@ -1,6 +1,9 @@
 #include "functions.h"
 #include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 void initialize_sequence(char **seq, long long len){
     //鹼基集
@@ -16,6 +19,30 @@ void initialize_sequence(char **seq, long long len){
 
     //最後一個字設中止符號
     (*seq)[len] = '\0';
+}
+
+void get_memory_info() {
+    FILE *fp = fopen("/proc/meminfo", "r");
+    if (fp == NULL) {
+        perror("Failed to open /proc/meminfo");
+        return;
+    }
+
+    char line[256];
+    long total_memory = 0, available_memory = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "MemTotal:", 9) == 0) {
+            sscanf(line, "MemTotal: %ld kB", &total_memory);
+        } else if (strncmp(line, "MemAvailable:", 13) == 0) {
+            sscanf(line, "MemAvailable: %ld kB", &available_memory);
+        }
+    }
+
+    fclose(fp);
+
+    printf("Total Memory: %.2f GB\n", total_memory / 1024.0 / 1024.0);
+    printf("Available Memory: %.2f GB\n", available_memory / 1024.0 / 1024.0);
 }
 
 
