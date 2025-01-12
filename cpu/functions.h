@@ -21,7 +21,7 @@ typedef struct{
 
 
 
-void initialize_sequence(char **seq, int len);
+void initialize_sequence(char **seq, long long len);
 
 Cell** initialize_matrix(char *reference, char *query);
 
