@@ -8,6 +8,8 @@ int main(){
     char *reference, *query;
     srand((unsigned int)time(NULL));
     //initialize sequence
+    // reference = "ACGTAGCATACATTAGTATTTTCATCGTACTGCATATCGATGTATGCATGTATTT";
+    // query = "GTATGCATCGATCGATCACGATCTACGGCTAGC";
     initialize_sequence(&reference, 30);
     initialize_sequence(&query, 20);
 

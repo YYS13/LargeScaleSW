@@ -21,7 +21,7 @@ typedef struct{
 
 
 
-void initialize_sequence(char **seq, long long len);
+void initialize_sequence(char **seq, int len);
 
 void get_memory_info();
 

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void initialize_sequence(char **seq, long long len){
+void initialize_sequence(char **seq, int len){
     //鹼基集
     const char baseset[] = "ACGT";
 
@@ -13,7 +13,7 @@ void initialize_sequence(char **seq, long long len){
     *seq = (char*)malloc((len + 1) * sizeof(char));
 
     //隨機生成 seq
-    for(long long i = 0; i <= len; i++){
+    for(int i = 0; i <= len; i++){
         (*seq)[i] = baseset[rand() % 4];
     }
 

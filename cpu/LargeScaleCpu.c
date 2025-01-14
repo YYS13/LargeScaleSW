@@ -1,61 +1,55 @@
 #include <time.h>
 #include <math.h>
 
-#include "functions.c"
+#include "LargeScaleFunctions.c"
 
 
 int main(){
+    clock_t start, end;
+    start = clock();
+
     get_memory_info();
-    char *reference, *query;
+    char *reference, *mtDNA, *query;
     srand((unsigned int)time(NULL));
     //initialize sequence
-    initialize_sequence(&reference,  (long long)(3.2 * pow(2, 30)));
-    initialize_sequence(&query, 16569);
+    // reference = "ACGTAGCATACATTAGTATTTTCATCGTACTGCATATCGATGTATGCATGTATTT";
+    // query = "GTATGCATCGATCGATCACGATCTACGGCTAGC";
+    initialize_sequence(&reference,  (long long)(3.2e8));
+    initialize_sequence(&mtDNA, 16569);
 
-    get_memory_info();
-
+    //expand mtDNA because mtDNA is circular sequence
+    query = expand_mtDNA(mtDNA);
     
 
-    //initialize matrix
-    //Cell **H = initialize_matrix(reference, query);
+    //initialize vector
+    int *H = initialize_vector(strlen(reference) + 1, 0);
+    int *E = initialize_vector(strlen(reference) + 1, INT_MIN);
 
-    //initialize E & F
-    //int *E = malloc(sizeof(int) * (strlen(reference) + 1));
-    //int *F = malloc(sizeof(int) * (strlen(query) + 1));
 
-    //fill element with negative infinity
-    //fill_vector(E, INT_MIN - EXTEND_GAP, (strlen(reference) + 1));
-    //fill_vector(F, INT_MIN - EXTEND_GAP, (strlen(query) + 1));
-    //printf("%d\n", E[1]);
-
-    //Result result;
-    //result.maxScore = INT_MIN;
+    Result result;
+    result.maxScore = INT_MIN;
 
     //alignment
-    // local_alignment(H, E, F, reference, query, &result);
+    local_alignment(H, E, reference, query, &result);
+    printf("maxScore = %d at (%d, %d)\n", result.maxScore, result.row, result.col);
 
     // printf("reference : %s\n", reference);
     // printf("query : %s\n", query);
-    // printf("H: \n");
-    // printMatrix(H, strlen(query) + 1, strlen(reference) + 1);
-    // printf("\nE: \n");
-    // printMatrix(E, strlen(query) + 1, strlen(reference) + 1);
-    // printf("\nF: \n");
-    // printMatrix(F, strlen(query) + 1, strlen(reference) + 1);
 
 
-    //traceback
-    // traceback(H, &result, reference, query);
 
     //free memory space
     free(reference);
     free(query);
-    // for (int i = 0; i <= strlen(query); i++) {
-    //     free(H[i]);
-    // }
-    // free(H);
-    // free(E);
-    // free(F);
+    free(H);
+    free(E);
+
+    end = clock();
+    double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
+    printf("total time: %.6f seconds\n", elapsed_time);
+    
+    convert_time(elapsed_time);
+
 
     return 0;
 }
