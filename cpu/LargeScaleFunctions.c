@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <math.h>
 
 // 初始化序列
 void initialize_sequence(char **seq, long long len){
@@ -80,6 +82,7 @@ void local_alignment(int *H, int *E, char *reference, char *query, Result *resul
         int cur_H = 0;
         int F = INT_MIN;
         for(long long j = 1; j <= strlen(reference); j++){
+            printf("%lld\n", j);
             E[j] = MAX(E[j] + EXTEND_GAP , H[j] + OPEN_GAP);
             
             F = MAX(F + EXTEND_GAP , cur_H + OPEN_GAP);

@@ -1,6 +1,3 @@
-#include <time.h>
-#include <math.h>
-
 #include "LargeScaleFunctions.c"
 
 
