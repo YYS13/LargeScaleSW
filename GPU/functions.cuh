@@ -8,6 +8,9 @@
 #define OPEN_GAP -5
 #define EXTEND_GAP -1
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) >= (b) ? (b) : (a))
+
 __constant__ char device_mtDNA[33139];
 __constant__ char device_slice_nDNA[6401];
 
@@ -126,6 +129,7 @@ char* substring(const char* str, size_t start, size_t length) {
 }
 
 // global
+//幫 vector 填值
 __global__ void fill_array_value(int *array, int value, size_t n){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx < n){
@@ -133,8 +137,33 @@ __global__ void fill_array_value(int *array, int value, size_t n){
     }
 }
 
+// 打印 vector 內容(用來檢查 fill_array_value 有無成功)
 __global__ void proint_arrInfo(int *array, int idx){
-    printf("F[%d] : %d\n", idx,  array[idx]);
+    printf("H[%d] : %d\n", idx,  array[idx]);
+}
+
+// 初始化 H (第一行第一列皆為 0);
+__global__ void initializeH(int *H, int mtDNA_len, int nDNA_slice_len){
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int maxLen = MAX(mtDNA_len, nDNA_slice_len);
+    int minLen = MIN(mtDNA_len, nDNA_slice_len);
+    if(tid < minLen){
+        H[tid] = 0;
+        H[minLen * tid] = 0;
+    }else if(tid < maxLen){
+        H[tid] = 0;
+    }
+}
+
+__global__ void cal_first_phase(int outer_dig, int max_blocks, int colsPerBlocks){
+    int x = blockIdx.x + threadIdx.x;
+    int y = outer_dig < max_blocks ? colsPerBlocks * outer_dig - x: colsPerBlocks * (max_blocks - 1) - x;
+
+    
+}
+
+__global__ void cal_second_phase(int outer_dig){
+
 }
 
 // device
