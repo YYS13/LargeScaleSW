@@ -1,7 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
-#include <string.h>
+#include <math.h>
 
 #include "functions.c"
 
@@ -10,6 +8,8 @@ int main(){
     char *reference, *query;
     srand((unsigned int)time(NULL));
     //initialize sequence
+    // reference = "ACGTAGCATACATTAGTATTTTCATCGTACTGCATATCGATGTATGCATGTATTT";
+    // query = "GTATGCATCGATCGATCACGATCTACGGCTAGC";
     initialize_sequence(&reference, 30);
     initialize_sequence(&query, 20);
 

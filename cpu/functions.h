@@ -23,6 +23,8 @@ typedef struct{
 
 void initialize_sequence(char **seq, int len);
 
+void get_memory_info();
+
 Cell** initialize_matrix(char *reference, char *query);
 
 void fill_vector(int *vector, int value, int length);
