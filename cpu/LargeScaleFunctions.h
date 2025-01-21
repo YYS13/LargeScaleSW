@@ -27,6 +27,11 @@ void local_alignment(int *H, int *E, char *reference, char *query, Result *resul
 
 void convert_time(double total_seconds);
 
+char* read_from_file(const char *filename);
+
+char* substring(const char* str, size_t start, size_t length);
+
+
 
 
 

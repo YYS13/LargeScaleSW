@@ -117,3 +117,59 @@ void convert_time(double total_seconds) {
 
     printf("Elapsed time: %d days, %d hours, %d minutes, %d seconds\n", days, hours, minutes, seconds);
 }
+
+// 讀字串
+char* read_from_file(const char *filename) {
+    FILE *file = fopen(filename, "r");  
+    if (file == NULL) {
+        perror("Failed to open file for reading");
+        exit(EXIT_FAILURE);
+    }
+
+    
+    fseek(file, 0, SEEK_END); //file 指標一到最後 
+    size_t file_size = ftell(file);  // 目前位置
+    rewind(file);  // file 指標回到開頭
+
+    char *data = (char *)malloc((file_size + 1) * sizeof(char));
+    if (data == NULL) {
+        perror("Memory allocation failed");
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+
+    // 读取文件内容到字符串
+    fread(data, sizeof(char), file_size, file);
+    data[file_size] = '\0';  // 添加字符串终止符
+
+    fclose(file);  // 关闭文件
+    return data;
+}
+
+// 取 substring
+char* substring(const char* str, size_t start, size_t length) {
+    size_t str_len = strlen(str);
+
+    // 防止亂丟參數
+    if (start >= str_len) {
+        return strdup("");  // 返回空字符串
+    }
+
+    // start + length 不能超過最大 idx
+    if (start + length > str_len) {
+        length = str_len - start;
+    }
+
+    // 分配空間（包含 '\0'）
+    char* result = (char*)malloc((length + 1) * sizeof(char));
+    if (result == NULL) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // 複製字串
+    strncpy(result, str + start, length);
+    result[length] = '\0';  // 添加终止符
+
+    return result;
+}

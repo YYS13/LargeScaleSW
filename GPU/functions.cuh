@@ -2,17 +2,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 #define MATCH 3
 #define MISMATCH -1
 #define OPEN_GAP -5
 #define EXTEND_GAP -1
 
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) >= (b) ? (b) : (a))
 
+
 __constant__ char device_mtDNA[33139];
 __constant__ char device_slice_nDNA[6401];
+__constant__ int panalty[4];
 
 cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNumber)
 {
@@ -145,8 +147,8 @@ __global__ void proint_arrInfo(int *array, int idx){
 // 初始化 H (第一行第一列皆為 0);
 __global__ void initializeH(int *H, int mtDNA_len, int nDNA_slice_len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int maxLen = MAX(mtDNA_len, nDNA_slice_len);
-    int minLen = MIN(mtDNA_len, nDNA_slice_len);
+    int maxLen = max2(mtDNA_len, nDNA_slice_len);
+    int minLen = max2(mtDNA_len, nDNA_slice_len);
     if(tid < minLen){
         H[tid] = 0;
         H[minLen * tid] = 0;
@@ -154,16 +156,177 @@ __global__ void initializeH(int *H, int mtDNA_len, int nDNA_slice_len){
         H[tid] = 0;
     }
 }
+/*
+    outer_dig : 第幾輪外部對角線
+    C : 一個 submatrix 大小為 R x C
 
-__global__ void cal_first_phase(int outer_dig, int max_blocks, int colsPerBlocks){
-    int x = blockIdx.x + threadIdx.x;
-    int y = outer_dig < max_blocks ? colsPerBlocks * outer_dig - x: colsPerBlocks * (max_blocks - 1) - x;
+ */
 
+
+__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
+    //放比對分數
+    __shared__ int shared_panalty[4];
+    //紀錄 block 內最大值
+    __shared__ int block_max_score[R]; // Block 內各tid最大值
+    __shared__ int block_max_i[R];     // Block 內各tid最大值對應的 i
+    __shared__ int block_max_j[R];     // Block 內各tid最大值對應的 j
     
+    if(threadIdx.x == 0){
+        for(int i = 0; i < 4; i++){
+            shared_panalty[i] = panalty[i];
+        }
+    }
+
+    // 計算 block 座標
+    int block_x = outer_dig - blockIdx.x;
+    int block_y = blockIdx.x;
+
+    // 計算 thread 處理的位置
+    int row = block_x * blockDim.x + 1;
+    int col = block_y * C - threadIdx.x + 1;
+    
+    //最左邊的 block 需計算 cell delegation 的內容
+    if(col <= 0){
+        row = row - blockDim.x * R;
+        col = slice_len + col;
+    }
+
+
+    //開始計算
+    for(int i = 0; i < (C - R); i++){
+        if(row > 0 || row <= mtDNA_len){
+            //計算
+            //E
+            E[col] = max2(E[col] + shared_panalty[2], H[(row - 1) * (mtDNA_len + 1) + col] + shared_panalty[3]);
+            //F
+            F[row] = max2(F[row] + shared_panalty[2], H[row * (mtDNA_len + 1) + (col - 1)] + shared_panalty[3]);
+            //H[row][col];
+            int match = device_mtDNA[row - 1] == device_slice_nDNA[col - 1] ? shared_panalty[0] : shared_panalty[1];
+
+            int curV = max4(E[col], F[row], H[(row - 1) * (mtDNA_len + 1) + (col - 1)] + match, 0);
+            H[row * mtDNA_len + col] = curV;
+
+            //store cell value & position in shared memory
+            block_max_score[threadIdx.x] = curV;
+            block_max_i[threadIdx.x] = row;
+            block_max_j[threadIdx.x] = col; 
+
+
+        }
+
+        col++;
+        if(col == slice_len){
+            col = 0;
+            row = row + blockDim.x * R;
+        }
+
+        __syncthreads();
+        //check max value in block 
+        if(threadIdx.x == 0){
+            int max_score = 0, max_i = -1, max_j = -1;
+        for (int k = 0; k < R; k++) {
+            if (block_max_score[k] > max_score) {
+                max_score = block_max_score[k];
+                max_i = block_max_i[k];
+                max_j = block_max_j[k];
+            }
+        }
+
+        // 使用原子操作（atomicMax）更新全局最大得分
+        atomicMax(global_max_score, max_score);
+            if (*global_max_score == max_score) {
+                *global_max_i = max_i;
+                *global_max_j = max_j;
+            }
+        }
+
+        __syncthreads();
+    }
+
+
+
 }
 
-__global__ void cal_second_phase(int outer_dig){
+__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
+    //放比對分數
+    __shared__ int shared_panalty[4];
+    //紀錄 block 內最大值
+    __shared__ int block_max_score[R]; // Block 內各tid最大值
+    __shared__ int block_max_i[R];     // Block 內各tid最大值對應的 i
+    __shared__ int block_max_j[R];     // Block 內各tid最大值對應的 j
+    
+    if(threadIdx.x == 0){
+        for(int i = 0; i < 4; i++){
+            shared_panalty[i] = panalty[i];
+        }
+    }
+    
+    // 計算 block 座標
+    int block_x = outer_dig - blockIdx.x;
+    int block_y = blockIdx.x;
 
+    // 計算 thread 處理的位置
+    int row = block_x * blockDim.x + 1;
+    int col = block_y * C - threadIdx.x + 1 + (C - R);
+
+
+    //開始計算
+    for(int i = 0; i < R; i++){
+        if(row > 0 || row <= mtDNA_len){
+            //計算
+            //E
+            E[col] = max2(E[col] + EXTEND_GAP, H[(row - 1) * (mtDNA_len + 1) + col] + OPEN_GAP);
+            //F
+            F[row] = max2(F[row] + EXTEND_GAP, H[row * (mtDNA_len + 1) + (col - 1)] + OPEN_GAP);
+            //H[row][col];
+            int match = device_mtDNA[row - 1] == device_slice_nDNA[col - 1] ? MATCH : MISMATCH;
+
+            int curV = max4(E[col], F[row], H[(row - 1) * (mtDNA_len + 1) + (col - 1)] + match, 0);
+            H[row * mtDNA_len + col] = curV;
+
+            //store cell value & position in shared memory
+            block_max_score[threadIdx.x] = curV;
+            block_max_i[threadIdx.x] = row;
+            block_max_j[threadIdx.x] = col; 
+
+        }
+
+        col++;
+
+        __syncthreads();
+
+        //check max value in block 
+        if(threadIdx.x == 0){
+            int max_score = 0, max_i = -1, max_j = -1;
+        for (int k = 0; k < R; k++) {
+            if (block_max_score[k] > max_score) {
+                max_score = block_max_score[k];
+                max_i = block_max_i[k];
+                max_j = block_max_j[k];
+            }
+        }
+
+        // 使用原子操作（atomicMax）更新全局最大得分
+        atomicMax(global_max_score, max_score);
+            if (*global_max_score == max_score) {
+                *global_max_i = max_i;
+                *global_max_j = max_j;
+            }
+        }
+
+        __syncthreads();
+    }
 }
 
 // device
+
+static __device__ int max2(int a, int b) {
+    return (a>b)?a:b;
+}
+
+/**
+ * Returns the maximum of four numbers.
+ */
+static __device__ int max4(int a, int b, int c, int d) {
+    return max2(max2(a,b), max2(c,d));
+}
