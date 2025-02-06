@@ -37,14 +37,17 @@ int main(){
         }
     }
 
+
     //分配 GPU 空間
-    cudaMemcpyToSymbol(panalty, panalty_score, 4 * sizeof(int));
+    ErrorCheck(cudaMemcpyToSymbol(panalty, panalty_score, 4 * sizeof(int)), __FILE__, __LINE__);
     int *F;
     ErrorCheck(cudaMalloc((int**) &F, sizeof(int) * strlen(mtDNA)), __FILE__, __LINE__);
     int *E;
     ErrorCheck(cudaMalloc((int**) &E, sizeof(int) * 6400), __FILE__, __LINE__);
     int *H;
     ErrorCheck(cudaMalloc((int**)&H, sizeof(int) * (strlen(mtDNA) + 1) * 6401), __FILE__, __LINE__);
+    initializeH<<<65, 512>>>(H);
+    cudaDeviceSynchronize();
     int *global_max_score;
     ErrorCheck(cudaMalloc((int**)&global_max_score, sizeof(int)), __FILE__, __LINE__);
     int *global_max_i;
@@ -60,48 +63,50 @@ int main(){
     fill_array_value<<<blocksPerGrid, threadsPerBlock>>>(F, INT_MIN - OPEN_GAP, strlen(mtDNA));
     cudaDeviceSynchronize();
 
-    // fill first row and col with 0 in H
-    start = clock();
-    int maxLen = MAX(strlen(mtDNA), 6400);
-    threadsPerBlock = 512;
-    blocksPerGrid = (maxLen + threadsPerBlock - 1) / threadsPerBlock;
-    initializeH<<<blocksPerGrid, threadsPerBlock>>>(H, strlen(mtDNA), 6400);
-    cudaDeviceSynchronize();
-    end = clock();
-    double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;
-    printf("填充 H 花 %.6f 秒\n", elapsed_time);
-
-    // proint_arrInfo<<<1, 1>>>(H, 6587);
-    // cudaDeviceSynchronize();
-
-
-    //根據nDNA長度切段去執行每個subMatrix
+    
+    int maxScore, maxI, maxJ;
+    // //根據nDNA長度切段去執行每個subMatrix
     int epoch = (int)(strlen(nDNA) / (size_t)6400);
-    threadsPerBlock = 263;
-    blocksPerGrid = 40;
     for(int i = 0; i < epoch; i++){
-        printf("%d / %d \n", i+1, epoch);
+        start = clock();
+        printf("%d / %d : ", i+1, epoch);
         char *slice = substring(nDNA, 6400 * i, 6400);
+        //printf("slice len = %d \n", (int)strlen(slice));
         //copy nDNA slice to constant memory
         ErrorCheck(cudaMemcpyToSymbol(device_slice_nDNA, slice, strlen(slice) + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
         // fill E vector with -∞
         blocksPerGrid = (6400 + threadsPerBlock - 1) / threadsPerBlock;
         fill_array_value<<<blocksPerGrid, threadsPerBlock>>>(E, INT_MIN - OPEN_GAP, strlen(slice));
         //start caculate submatrix
+        threadsPerBlock = 263;
+        blocksPerGrid = 16;
         int outer_diag = blocksPerGrid + (strlen(mtDNA) / threadsPerBlock);
         for(int i = 0; i < outer_diag; i++){
-            // do first part in all blocks
-            cal_first_phase<<<blocksPerGrid, threadsPerBlock>>>(i, threadsPerBlock, (int)(strlen(slice) / blocksPerGrid), strlen(slice), strlen(mtDNA), E, F, H, global_max_score, global_max_i, global_max_j);
-            cudaDeviceSynchronize();
-            // do second part in all blocks
-            cal_second_phase<<<blocksPerGrid, threadsPerBlock>>>(i, threadsPerBlock, (int)(strlen(slice) / blocksPerGrid), strlen(slice), strlen(mtDNA), E, F, H, global_max_score, global_max_i, global_max_j);
-            cudaDeviceSynchronize();
+             // do first part in all blocks
+             cal_first_phase<<<blocksPerGrid, threadsPerBlock>>>(i, threadsPerBlock, (int)(strlen(slice) / blocksPerGrid), strlen(slice), strlen(mtDNA), E, F, H, global_max_score, global_max_i, global_max_j);
+             cudaDeviceSynchronize();
+             // do second part in all blocks
+             //cal_second_phase<<<blocksPerGrid, threadsPerBlock>>>(i, threadsPerBlock, (int)(strlen(slice) / blocksPerGrid), strlen(slice), strlen(mtDNA), E, F, H, global_max_score, global_max_i, global_max_j);
+             //cudaDeviceSynchronize();
         }
-        printf("max score : %d at (%d, %d)\n", *global_max_score, *global_max_i, *global_max_j);
+        cudaMemcpy(&maxScore, global_max_score, sizeof(int), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&maxI, global_max_i, sizeof(int), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&maxJ, global_max_j, sizeof(int), cudaMemcpyDeviceToHost);
+        printf("max score = %d at (%d, %d)  ", maxScore, maxI, maxJ);
+        int threadsPerBlock = 512;
+        int blocksPerGrid = ((strlen(mtDNA)+1) + threadsPerBlock - 1) / threadsPerBlock;
+        move_data<<<blocksPerGrid, threadsPerBlock>>>(H, (int)strlen(mtDNA), (int)strlen(slice));
+        free(slice);
+        end = clock();
+        double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;
+        printf("花 %.6f 秒\n", elapsed_time);
     }
 
 
-    //free memory space
+    // //free memory space
+    cudaFree(global_max_score);
+    cudaFree(global_max_i);
+    cudaFree(global_max_j);
     cudaFree(F);
     cudaFree(E);
     cudaFree(H);

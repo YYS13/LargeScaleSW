@@ -1,6 +1,8 @@
 #ifndef LARGESCALEFUNCTIONS_H
 #define LARGESCALEFUNCTIONS
 
+#include <stddef.h>
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define MATCH 3

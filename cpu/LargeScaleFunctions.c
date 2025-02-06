@@ -77,12 +77,11 @@ int* initialize_vector(long long len, int val){
 //caculate local alignment
 void local_alignment(int *H, int *E, char *reference, char *query, Result *result){
     for(int i = 1; i <= strlen(query); i++){
-        printf("%d / %ld\n", i, strlen(query));
+        //printf("%d / %ld\n", i, strlen(query));
         int dig_H = 0;
         int cur_H = 0;
         int F = INT_MIN;
         for(long long j = 1; j <= strlen(reference); j++){
-            printf("%lld\n", j);
             E[j] = MAX(E[j] + EXTEND_GAP , H[j] + OPEN_GAP);
             
             F = MAX(F + EXTEND_GAP , cur_H + OPEN_GAP);
@@ -100,7 +99,9 @@ void local_alignment(int *H, int *E, char *reference, char *query, Result *resul
             dig_H = H[j];
 
             H[j] = cur_H;
+            printf("%d  ", cur_H);
         }
+        printf("\n");
     }
 }
 

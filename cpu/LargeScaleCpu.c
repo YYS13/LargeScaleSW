@@ -6,38 +6,45 @@ int main(){
     start = clock();
 
     get_memory_info();
-    char *reference, *mtDNA, *query;
+    char *nDNA, *mtDNA;
     srand((unsigned int)time(NULL));
     //initialize sequence
     // reference = "ACGTAGCATACATTAGTATTTTCATCGTACTGCATATCGATGTATGCATGTATTT";
     // query = "GTATGCATCGATCGATCACGATCTACGGCTAGC";
-    initialize_sequence(&reference,  (long long)(3.2e8));
-    initialize_sequence(&mtDNA, 16569);
+    // initialize_sequence(&reference,  (long long)(3.2e8));
+    // initialize_sequence(&mtDNA, 16569);
+    nDNA = read_from_file("../data/nDNA.txt");
+    mtDNA = read_from_file("../data/mtDNA.txt");
+    //test data
+    char *nDNA_slice = substring(nDNA, 0, 24);
+    char *mtDNA_slice = substring(mtDNA, 0, 39);
+    printf("nDNA : %s\n", nDNA_slice);
+    printf("mtDNA : %s\n", mtDNA_slice);
+    
 
     //expand mtDNA because mtDNA is circular sequence
-    query = expand_mtDNA(mtDNA);
+    // query = expand_mtDNA(mtDNA);
     
 
     //initialize vector
-    int *H = initialize_vector(strlen(reference) + 1, 0);
-    int *E = initialize_vector(strlen(reference) + 1, INT_MIN);
+    int *H = initialize_vector(strlen(nDNA) + 1, 0);
+    int *E = initialize_vector(strlen(nDNA) + 1, INT_MIN);
 
 
     Result result;
     result.maxScore = INT_MIN;
 
     //alignment
-    local_alignment(H, E, reference, query, &result);
+    local_alignment(H, E, nDNA_slice, mtDNA_slice, &result);
     printf("maxScore = %d at (%d, %d)\n", result.maxScore, result.row, result.col);
-
-    // printf("reference : %s\n", reference);
-    // printf("query : %s\n", query);
 
 
 
     //free memory space
-    free(reference);
-    free(query);
+    free(nDNA);
+    free(mtDNA);
+    free(nDNA_slice);
+    free(mtDNA_slice);
     free(H);
     free(E);
 
