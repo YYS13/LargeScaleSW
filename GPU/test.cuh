@@ -14,7 +14,7 @@
 #define MIN(a, b) ((a) >= (b) ? (b) : (a))
 
 
-__constant__ char device_mtDNA[40];
+__constant__ char device_mtDNA[53];
 __constant__ char device_nDNA[25];
 __constant__ int panalty[4];
 
@@ -151,6 +151,17 @@ void convert_time(double total_seconds) {
     printf("Elapsed time: %d days, %d hours, %d minutes, %d seconds\n", days, hours, minutes, seconds);
 }
 
+// 查看結果矩陣
+void check_matrix(int *copyH, int *H, char *mtDNA_slice, int slice_len){
+    ErrorCheck(cudaMemcpy(copyH, H, sizeof(int) * (strlen(mtDNA_slice) + 1) * (slice_len + 1), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
+    for(int i = 0; i < (strlen(mtDNA_slice) + 1); i++){
+        for(int j = 0; j < (slice_len + 1); j++){
+            printf("%d  ", copyH[i * (slice_len + 1) + j]);
+        }
+        printf("\n");
+    }
+}
+
 // device
 
 __device__ int max2(int a, int b) {
@@ -211,10 +222,11 @@ __global__ void initializeH(int *H) {
 }
 
 // submatrix 算完把最後一行資料搬到第一行
-__global__ void move_data(int *H, int mtDNA_len, int nDNA_slice_len){
+
+__global__ void move_data(int *H, int mtDNA_len, int slice_len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid > 0 && tid < mtDNA_len + 1){
-        H[tid * (nDNA_slice_len + 1)] = H[tid * (nDNA_slice_len + 1) + nDNA_slice_len];
+    if(tid >= 1 && tid <= mtDNA_len){
+        H[tid * (slice_len + 1)] = H[tid * (slice_len + 1) + slice_len];
     }
 }
 /*
@@ -249,8 +261,12 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
     }
 
 
+
     //開始計算
     for(int times = 0; times < R; times++){
+        // if(blockIdx.x == 0){
+        //     printf("tid = %d, round = %d, cell = (%d, %d)\n", threadIdx.x, times+1, i, j);
+        // }
         if(i >= 1 && i <= mtDNA_len){
             E[j-1] = max2(E[j-1] + shared_panalty[2], H[(i-1) * (slice_len + 1) + j] + shared_panalty[3]);
 
@@ -258,10 +274,10 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
             
             int match = device_mtDNA[i - 1] == device_nDNA[j - 1] ? shared_panalty[0] : shared_panalty[1];
 
-            //if(i == 3 && j == 24)printf("Dk = %d, index = %d, H[i-1][j-1] = %d, match = %d, H[i-1][j-1] + match = %d\n", outer_dig, (i - 1) * (slice_len + 1) + (j - 1), H[((i - 1) * (slice_len + 1)) + (j - 1)], match, H[((i - 1) * (slice_len + 1)) + (j - 1)] + match);
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
             H[i * (slice_len + 1) + j] = curV;
+
 
             //儲存 H[i][j] 和其位置到 shared memory 中
             block_max_score[threadIdx.x] = curV;
@@ -273,7 +289,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
         // 是否結束 cell delegation 回去原本的位置繼續做
         if(j == slice_len + 1){
             j = 1;
-            i = i + blockDim.x * R; 
+            i = i + gridDim.x * R; 
         }
 
         __syncthreads(); //等待大家都把該輪內部對角線都寫入 shared memory 中
