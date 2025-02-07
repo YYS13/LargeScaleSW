@@ -80,7 +80,7 @@ void local_alignment(int *H, int *E, char *reference, char *query, Result *resul
         //printf("%d / %ld\n", i, strlen(query));
         int dig_H = 0;
         int cur_H = 0;
-        int F = INT_MIN;
+        int F = INT_MIN - EXTEND_GAP;
         for(long long j = 1; j <= strlen(reference); j++){
             E[j] = MAX(E[j] + EXTEND_GAP , H[j] + OPEN_GAP);
             
@@ -99,9 +99,10 @@ void local_alignment(int *H, int *E, char *reference, char *query, Result *resul
             dig_H = H[j];
 
             H[j] = cur_H;
-            printf("%d  ", cur_H);
+
+            //printf(" %d ", cur_H);
         }
-        printf("\n");
+        //printf("\n");
     }
 }
 

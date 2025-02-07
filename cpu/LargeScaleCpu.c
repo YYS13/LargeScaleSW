@@ -16,8 +16,8 @@ int main(){
     nDNA = read_from_file("../data/nDNA.txt");
     mtDNA = read_from_file("../data/mtDNA.txt");
     //test data
-    char *nDNA_slice = substring(nDNA, 0, 24);
-    char *mtDNA_slice = substring(mtDNA, 0, 39);
+    char *nDNA_slice = substring(nDNA, 0, 72);
+    char *mtDNA_slice = substring(mtDNA, 0, 52);
     printf("nDNA : %s\n", nDNA_slice);
     printf("mtDNA : %s\n", mtDNA_slice);
     
@@ -28,7 +28,7 @@ int main(){
 
     //initialize vector
     int *H = initialize_vector(strlen(nDNA) + 1, 0);
-    int *E = initialize_vector(strlen(nDNA) + 1, INT_MIN);
+    int *E = initialize_vector(strlen(nDNA) + 1, INT_MIN - EXTEND_GAP);
 
 
     Result result;
