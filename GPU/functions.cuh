@@ -6,6 +6,9 @@
 #define MISMATCH -1
 #define OPEN_GAP -5
 #define EXTEND_GAP -1
+#define SCORE_SIZE 4
+#define THREADS_PER_BLOCK 126
+#define MTDNA_LEN 33138
 
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -13,7 +16,7 @@
 
 
 __constant__ char device_mtDNA[33139];
-__constant__ char device_slice_nDNA[6401];
+__constant__ char device_nDNA[7681];
 __constant__ int panalty[4];
 
 cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNumber)
@@ -30,6 +33,17 @@ cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNum
 // host (只在cpu執行)
 
 // 初始化序列
+
+__host__ int find_max_slice_len(int mtDNA_len, size_t global_memory_size, int blocks){
+    int slice_len = (global_memory_size - ((2 * mtDNA_len + 1) * 32)) / (33140 * 32);
+
+    for(int i = slice_len; i >= 0; --i){
+        if(i % blocks == 0) return i;
+    }
+
+    return 0;
+}
+
 __host__ void initialize_sequence(char **seq, long long len){
     //鹼基集
     const char baseset[] = "ACGT";
@@ -130,7 +144,44 @@ char* substring(const char* str, size_t start, size_t length) {
     return result;
 }
 
-// device
+// 對 array 每個元素填上相同的值
+void fill_array(int *array, long long size ,int val){
+    for(int i = 0; i < size; i++){
+        array[i] = val;
+    }
+}
+
+// 將秒數轉換成 d/h/m/s
+void convert_time(double total_seconds) {
+    int days = (int)(total_seconds / (24 * 3600));       
+    total_seconds = fmod(total_seconds, 24 * 3600);      
+
+    int hours = (int)(total_seconds / 3600);             
+    total_seconds = fmod(total_seconds, 3600);           
+
+    int minutes = (int)(total_seconds / 60);             
+    int seconds = (int)fmod(total_seconds, 60);         
+
+    printf("Elapsed time: %d days, %d hours, %d minutes, %d seconds\n", days, hours, minutes, seconds);
+}
+
+// 查看結果矩陣
+void check_matrix(int *copyH, int *H, char *mtDNA_slice, int slice_len){
+    ErrorCheck(cudaMemcpy(copyH, H, sizeof(int) * (strlen(mtDNA_slice) + 1) * (slice_len + 1), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
+    for(int i = 0; i < (strlen(mtDNA_slice) + 1); i++){
+        for(int j = 0; j < (slice_len + 1); j++){
+            printf("%d  ", copyH[i * (slice_len + 1) + j]);
+        }
+        printf("\n");
+    }
+}
+
+
+// device functions
+
+/**
+ * Returns the maximum of two numbers.
+ */
 
 __device__ int max2(int a, int b) {
     return (a>b)?a:b;
@@ -144,7 +195,28 @@ __device__ int max4(int a, int b, int c, int d) {
 }
 
 
-// global
+/**
+ * Dk : 第幾輪外部對角線
+ * blockId : 第幾個 block
+ * R : 一個 block 計算子矩陣的高
+ * C : 一個 block 計算子矩陣的寬
+ * i : 該 block 負責的子矩陣第一格列位置 
+ * j : 該 block 負責的子矩陣第一格行位置
+ */
+__device__ inline void getBlockCoordinate(int Dk, int blockId, int threadId, int R, int C, int *i, int *j){
+    
+    // 取得該 block 座標
+    int block_i = Dk - blockId;
+    int block_j = blockId;
+
+    *i = (block_i * R) + threadId + 1;
+    *j = block_j * C - threadId + 1;
+
+}
+
+
+// global funtions
+
 //幫 vector 填值
 __global__ void fill_array_value(int *array, int value, size_t n){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -153,192 +225,179 @@ __global__ void fill_array_value(int *array, int value, size_t n){
     }
 }
 
-// 打印 vector 內容(用來檢查 fill_array_value 有無成功)
-__global__ void proint_arrInfo(int *array, int idx){
-    printf("H[%d] : %d\n", idx,  array[idx]);
-}
-
-// 初始化 H (第一行第一列皆為 0);
-__global__ void initializeH(int *H) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid < 6401){
-        H[tid] = 0;
-        H[tid * 6401] = 0;
-    }
-    if(tid < 33139){
-        H[tid * 6401] = 0;
-    }
-}
-
 // submatrix 算完把最後一行資料搬到第一行
-__global__ void move_data(int *H, int mtDNA_len, int nDNA_slice_len){
+
+__global__ void move_data(int *H, int mtDNA_len, int slice_len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid > 0 && tid < mtDNA_len + 1){
-        H[tid * (nDNA_slice_len + 1)] = H[tid * (nDNA_slice_len + 1) + nDNA_slice_len];
+    if(tid >= 1 && tid <= mtDNA_len){
+        H[tid * (slice_len + 1)] = H[tid * (slice_len + 1) + slice_len];
     }
 }
+
+
 /*
     outer_dig : 第幾輪外部對角線
-    C : 一個 submatrix 大小為 R x C
-
+    R : 一個 block 負責大小為 R x C
+    C : 一個 block 負責大小為 R x C
+    slice_len : 一個 nDNA 切片長度 
+    mtDNA_len : 粒線體長度
  */
 
 
 __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
     //放比對分數
-    __shared__ int shared_panalty[4];
+    __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
-    __shared__ int block_max_score[263]; // Block 內各tid最大值
-    __shared__ int block_max_i[263];     // Block 內各tid最大值對應的 i
-    __shared__ int block_max_j[263];     // Block 內各tid最大值對應的 j
+    __shared__ int block_max_score[THREADS_PER_BLOCK]; // Block 內各tid最大值
+    __shared__ int block_max_i[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 i
+    __shared__ int block_max_j[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 j
+
+    //把 penalty score 搬到 shared memory 中
     if(threadIdx.x == 0){
         for(int i = 0; i < 4; i++){
             shared_panalty[i] = panalty[i];
         }
     }
+    __syncthreads();
 
-    // 計算 block 座標
-    int block_x = outer_dig - blockIdx.x;
-    int block_y = blockIdx.x;
-    if(threadIdx.x == 55){
-        printf("Block Position = (%d, %d) \n", block_x, block_y);
+    int i, j; //計算各 thread 負責的起始位置
+    getBlockCoordinate(outer_dig, blockIdx.x, threadIdx.x, R, C, &i, &j);
+
+    if(j < 1){
+        i = i - gridDim.x * R;
+        j = slice_len + j;
     }
 
-    // 計算 thread 處理的位置
-    int row = block_x * blockDim.x + 1;
-    int col = block_y * C - threadIdx.x + 1;
-    
-    if(threadIdx.x == 55){
-        printf("Cell Position = (%d, %d) \n", row, col);
-    }
-    //最左邊的 block 需計算 cell delegation 的內容
-    if(col <= 0){
-        row = row - blockDim.x * R;
-        col = slice_len + col;
-    }
+
 
     //開始計算
-    //for(int i = 0; i < (C - R); i++){
-    //     if(row > 0 || row <= mtDNA_len){
-             //計算
-             //E
-    //         E[col-1] = max2(E[col-1] + shared_panalty[2], H[(row - 1) * (slice_len + 1) + col] + shared_panalty[3]);
-             //F
-             //F[row-1] = max2(F[row-1] + shared_panalty[2], H[row * (slice_len + 1) + (col - 1)] + shared_panalty[3]);
-    //         //H[row][col];
-    //         int match = device_mtDNA[row - 1] == device_slice_nDNA[col - 1] ? shared_panalty[0] : shared_panalty[1];
+    for(int times = 0; times < R; times++){
+        // if(blockIdx.x == 0){
+        //     printf("tid = %d, round = %d, cell = (%d, %d)\n", threadIdx.x, times+1, i, j);
+        // }
+        if(i >= 1 && i <= mtDNA_len){
+            E[j-1] = max2(E[j-1] + shared_panalty[2], H[(i-1) * (slice_len + 1) + j] + shared_panalty[3]);
 
-    //         int curV = max4(E[col], F[row], H[(row - 1) * (slice_len + 1) + (col - 1)] + match, 0);
-    //         H[row * (slice_len + 1) + col] = curV;
-
-    //         //store cell value & position in shared memory
-    //         block_max_score[threadIdx.x] = curV;
-    //         block_max_i[threadIdx.x] = row;
-    //         block_max_j[threadIdx.x] = col; 
+            F[i-1] = max2(F[i-1] + shared_panalty[2], H[i * (slice_len + 1) + (j-1)] + shared_panalty[3]);
+            
+            int match = device_mtDNA[i - 1] == device_nDNA[j - 1] ? shared_panalty[0] : shared_panalty[1];
 
 
-    //     }
+            int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+            H[i * (slice_len + 1) + j] = curV;
 
-    //     col++;
-    //     if(col == slice_len){
-    //         col = 0;
-    //         row = row + blockDim.x * R;
-    //     }
 
-    //     __syncthreads();
-    //     //check max value in block 
-    //     if(threadIdx.x == 0){
-    //         int max_score = 0, max_i = -1, max_j = -1;
-    //     for (int k = 0; k < R; k++) {
-    //         if (block_max_score[k] > max_score) {
-    //             max_score = block_max_score[k];
-    //             max_i = block_max_i[k];
-    //             max_j = block_max_j[k];
-    //         }
-    //     }
+            //儲存 H[i][j] 和其位置到 shared memory 中
+            block_max_score[threadIdx.x] = curV;
+            block_max_i[threadIdx.x] = i;
+            block_max_j[threadIdx.x] = j;
+        }
 
-    //     // 使用原子操作（atomicMax）更新全局最大得分
-    //     atomicMax(global_max_score, max_score);
-    //         if (*global_max_score == max_score) {
-    //             *global_max_i = max_i;
-    //             *global_max_j = max_j;
-    //         }
-    //     }
+        j++;
+        // 是否結束 cell delegation 回去原本的位置繼續做
+        if(j == slice_len + 1){
+            j = 1;
+            i = i + gridDim.x * R; 
+        }
 
-    //     __syncthreads();
-    //}
+        __syncthreads(); //等待大家都把該輪內部對角線都寫入 shared memory 中
 
+        //由 tid = 0 的 thread 檢查 shared memory 中最大值與其位置
+        if(threadIdx.x == 0){
+            int max_score = 0, max_i = -1, max_j = -1;
+            
+            for (int k = 0; k < R; k++) {
+                if (block_max_score[k] > max_score) {
+                    max_score = block_max_score[k];
+                    max_i = block_max_i[k];
+                    max_j = block_max_j[k];
+                }
+            }
+
+            //使用原子操作（atomicMax）更新全局最大得分
+            atomicMax(global_max_score, max_score);
+            if (*global_max_score == max_score) {
+                *global_max_i = max_i;
+                *global_max_j = max_j;
+            }
+        
+        }
+
+        __syncthreads(); //等待 tid0 檢查最大值
+
+    }
 
 
 }
 
 __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
     //放比對分數
-    __shared__ int shared_panalty[4];
+    __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
-    __shared__ int block_max_score[263]; // Block 內各tid最大值
-    __shared__ int block_max_i[263];     // Block 內各tid最大值對應的 i
-    __shared__ int block_max_j[263];     // Block 內各tid最大值對應的 j
+    __shared__ int block_max_score[THREADS_PER_BLOCK]; // Block 內各tid最大值
+    __shared__ int block_max_i[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 i
+    __shared__ int block_max_j[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 j
     
+    //把 penalty score 搬到 shared memory 中
     if(threadIdx.x == 0){
         for(int i = 0; i < 4; i++){
             shared_panalty[i] = panalty[i];
         }
     }
-    
-    // 計算 block 座標
-    int block_x = outer_dig - blockIdx.x;
-    int block_y = blockIdx.x;
 
-    // 計算 thread 處理的位置
-    int row = block_x * blockDim.x + 1;
-    int col = block_y * C - threadIdx.x + 1 + (C - R);
+    __syncthreads();
 
+
+    int i, j; //計算各 thread 負責的起始位置
+    getBlockCoordinate(outer_dig, blockIdx.x, threadIdx.x, R, C, &i, &j);
+
+    j = j + R;
 
     //開始計算
-    for(int i = 0; i < R; i++){
-        if(row > 0 || row <= mtDNA_len){
-            //計算
-            //E
-            E[col] = max2(E[col] + shared_panalty[2], H[(row - 1) * (slice_len + 1) + col] + shared_panalty[3]);
-            //F
-            F[row] = max2(F[row] + shared_panalty[2], H[row * (slice_len + 1) + (col - 1)] + shared_panalty[3]);
-            //H[row][col];
-            int match = device_mtDNA[row - 1] == device_slice_nDNA[col - 1] ? shared_panalty[0] : shared_panalty[1];
+    for(int times = 0; times < (C - R); times++){
+        if(i >= 1 && i <= mtDNA_len){
+            E[j-1] = max2(E[j-1] + shared_panalty[2], H[(i-1) * (slice_len + 1) + j] + shared_panalty[3]);
 
-            int curV = max4(E[col], F[row], H[(row - 1) * (slice_len + 1) + (col - 1)] + match, 0);
-            H[row * (slice_len + 1) + col] = curV;
+            F[i-1] = max2(F[i-1] + shared_panalty[2], H[i * (slice_len + 1) + (j-1)] + shared_panalty[3]);
 
-            //store cell value & position in shared memory
+            int match = device_mtDNA[i - 1] == device_nDNA[j - 1] ? shared_panalty[0] : shared_panalty[1];
+
+            int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+            //printf("H[i-1][j-1] + match = %d", H[(i - 1) * (slice_len + 1) + (j - 1)]);
+            H[i * (slice_len + 1) + j] = curV;
+            //if(i == 2 && j== 23) printf("H[2][23] = %d\n", H[i * (slice_len + 1) + j]);
+
+            //儲存 H[i][j] 和其位置到 shared memory 中
             block_max_score[threadIdx.x] = curV;
-            block_max_i[threadIdx.x] = row;
-            block_max_j[threadIdx.x] = col; 
-
+            block_max_i[threadIdx.x] = i;
+            block_max_j[threadIdx.x] = j;
         }
+        j++;
 
-        col++;
+        __syncthreads(); //等待大家都把該輪內部對角線都寫入 shared memory 中
 
-        __syncthreads();
-
-        //check max value in block 
+        //由 tid = 0 的 thread 檢查 shared memory 中最大值與其位置
         if(threadIdx.x == 0){
             int max_score = 0, max_i = -1, max_j = -1;
-        for (int k = 0; k < R; k++) {
-            if (block_max_score[k] > max_score) {
-                max_score = block_max_score[k];
-                max_i = block_max_i[k];
-                max_j = block_max_j[k];
+            
+            for (int k = 0; k < R; k++) {
+                if (block_max_score[k] > max_score) {
+                    max_score = block_max_score[k];
+                    max_i = block_max_i[k];
+                    max_j = block_max_j[k];
+                }
             }
-        }
 
-        // 使用原子操作（atomicMax）更新全局最大得分
-        atomicMax(global_max_score, max_score);
+            //使用原子操作（atomicMax）更新全局最大得分
+            atomicMax(global_max_score, max_score);
             if (*global_max_score == max_score) {
                 *global_max_i = max_i;
                 *global_max_j = max_j;
             }
+        
         }
 
-        __syncthreads();
+        __syncthreads(); //等待 tid0 檢查最大值
+
     }
 }

@@ -16,10 +16,10 @@ int main(){
     nDNA = read_from_file("../data/nDNA.txt");
     mtDNA = read_from_file("../data/mtDNA.txt");
     //test data
-    char *nDNA_slice = substring(nDNA, 0, 72);
-    char *mtDNA_slice = substring(mtDNA, 0, 52);
-    printf("nDNA : %s\n", nDNA_slice);
-    printf("mtDNA : %s\n", mtDNA_slice);
+    char *nDNA_slice = substring(nDNA, 0, 15360);
+    char *mtDNA_slice = substring(mtDNA, 0, 33138);
+    // printf("nDNA : %s\n", nDNA_slice);
+    // printf("mtDNA : %s\n", mtDNA_slice);
     
 
     //expand mtDNA because mtDNA is circular sequence
