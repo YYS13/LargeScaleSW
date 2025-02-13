@@ -19,10 +19,16 @@ int main(){
     printf("nDNA_slice_len = %d\n", nDNA_slice_len);
 
     // 讀取數據
+    char *chromosome2 = read_from_file("../data/GRCh38.chromosome2.txt");
+    char *nc1 = read_from_file("../data/NC_012920.1.txt");
+    printf("chromosome2 length = %zu\n", strlen(chromosome2));
+    free(chromosome2);
+    printf("NC_012920.1 length = %zu \n", strlen(nc1));
+    free(nc1);
     char *nDNA = read_from_file("../data/nDNA.txt");
     char *mtDNA = read_from_file("../data/mtDNA.txt");
     printf("nDNA length = %zu\n", strlen(nDNA));
-    printf("nDNA length = %zu\n", strlen(mtDNA));
+    printf("mtDNA length = %zu\n", strlen(mtDNA));
 
     //設定 panalty 參數
     int *panalty_score = (int *)malloc(sizeof(int) * 4);
@@ -71,7 +77,7 @@ int main(){
     int *global_max_i;
     ErrorCheck(cudaMalloc((int**)&global_max_i, sizeof(int)), __FILE__, __LINE__);
     int *global_max_j;
-    ErrorCheck(cudaMalloc((int**)&global_max_j, sizeof(int)), __FILE__, __LINE__);
+    ErrorCheck(cudaMalloc((long long**)&global_max_j, sizeof(long long)), __FILE__, __LINE__);
 
     // copy mtDNA 到 constant memory
     ErrorCheck(cudaMemcpyToSymbol(device_mtDNA, mtDNA, MTDNA_LEN + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
@@ -90,8 +96,8 @@ int main(){
 
     // 開始計算
     start = clock();
-    for(int epoch = 0; epoch < strlen(nDNA); epoch += nDNA_slice_len){
-        if(epoch/nDNA_slice_len + 1 == 3) break;
+    for(int epoch = 0; epoch <= strlen(nDNA) - nDNA_slice_len; epoch += nDNA_slice_len){
+        if(epoch/nDNA_slice_len + 1 == 4) break;
         printf("Epoch %d/%d\n", epoch/nDNA_slice_len + 1, (int)(strlen(nDNA)/nDNA_slice_len));
         char* slice = substring(nDNA, epoch, nDNA_slice_len);
         // copy nDNA 到 constant memory
@@ -103,7 +109,7 @@ int main(){
 
         
         for(int i = 0; i < outer_diag; i++){
-            printf("%d/%d\n", i, outer_diag);
+            //printf("%d/%d\n", i, outer_diag);
             //計算前半段
             cal_first_phase<<<blocksPerGrid, THREADS_PER_BLOCK>>>(i, R, C, strlen(slice), MTDNA_LEN, E, F, H, global_max_score, global_max_i, global_max_j);
             cudaDeviceSynchronize();
@@ -111,23 +117,34 @@ int main(){
             cal_second_phase<<<blocksPerGrid, THREADS_PER_BLOCK>>>(i, R, C, strlen(slice), MTDNA_LEN, E, F, H, global_max_score, global_max_i, global_max_j);
             cudaDeviceSynchronize();
         }
+
+        if(MTDNA_LEN % THREADS_PER_BLOCK != 0){
+            int threadsPerBlock = MTDNA_LEN % THREADS_PER_BLOCK;
+            int start_row = (MTDNA_LEN / THREADS_PER_BLOCK) * THREADS_PER_BLOCK + 1; 
+            //計算剩餘的子矩陣
+            for(int i = 0; i <= blocksPerGrid; i++){
+                int iter = i == blocksPerGrid ? threadsPerBlock - 1 : C;
+                do_rest_row <<<1, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, threadsPerBlock, start_row, nDNA_slice_len, iter, C, E, F, H, global_max_score, global_max_i, global_max_j);
+                cudaDeviceSynchronize();    
+            }
+        }
         
 
         //把H最後一行數值搬到第一行，提供下一個子矩陣計算
         blocks = ((MTDNA_LEN + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK) + 1;
         move_data<<<blocks, THREADS_PER_BLOCK>>>(H, MTDNA_LEN, nDNA_slice_len);
         cudaDeviceSynchronize();
-
-        //打印最大值
-        int maxScore, maxI, maxJ;
-        cudaMemcpy(&maxScore, global_max_score, sizeof(int), cudaMemcpyDeviceToHost);
-        cudaMemcpy(&maxI, global_max_i, sizeof(int), cudaMemcpyDeviceToHost);
-        cudaMemcpy(&maxJ, global_max_j, sizeof(int), cudaMemcpyDeviceToHost);
-        printf("max score = %d at (%d, %d)  \n", maxScore, maxI, maxJ + nDNA_slice_len * (epoch/nDNA_slice_len));
     }
     end = clock();
     double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
 
+    //打印最大值
+    int maxScore, maxI;
+    long long maxJ;
+    cudaMemcpy(&maxScore, global_max_score, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&maxI, global_max_i, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&maxJ, global_max_j, sizeof(long), cudaMemcpyDeviceToHost);
+    printf("max score = %d at (%d, %lld)  \n", maxScore, maxI, maxJ);
     // 釋放 cpu 記憶體空間
     free(nDNA);
     free(mtDNA);

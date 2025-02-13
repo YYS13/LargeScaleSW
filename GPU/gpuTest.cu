@@ -11,8 +11,8 @@ int main(){
     char *mtDNA = read_from_file("../data/mtDNA.txt");
 
     //test data
-    char *nDNA_slice = substring(nDNA, 0, 72);
-    char *mtDNA_slice = substring(mtDNA, 0, 52);
+    char *nDNA_slice = substring(nDNA, 0, 24);
+    char *mtDNA_slice = substring(mtDNA, 0, 43);
 
     printf("nDNA : %s\n", nDNA_slice);
     printf("mtDNA : %s\n", mtDNA_slice);
@@ -90,7 +90,7 @@ int main(){
 
 
     //設定計算 blocks & threads 數
-    int threadsPerBlockForSW = 3;
+    int threadsPerBlockForSW = 4;
     int blocksPerGridForSW = 4;
     int outer_diag = blocksPerGridForSW + (strlen(mtDNA_slice) / threadsPerBlockForSW);
     int R = threadsPerBlockForSW;
@@ -100,7 +100,7 @@ int main(){
     //開始計算
 
     start = clock();
-    for(int epoch = 0; epoch < strlen(nDNA_slice); epoch += slice_len){
+    for(int epoch = 0; epoch <= strlen(nDNA_slice) - slice_len; epoch += slice_len){
         printf("Epoch %d/%d\n", epoch/slice_len + 1, (int)(strlen(nDNA_slice)/slice_len));
         char* slice = substring(nDNA_slice, epoch, slice_len);
         // copy nDNA 到 constant memory
@@ -110,14 +110,9 @@ int main(){
         blocksPerGrid = (slice_len + threadsPerBlock - 1) / threadsPerBlock;
         fill_array_value<<<blocksPerGrid, threadsPerBlock>>>(E, INT_MIN - EXTEND_GAP + 1, slice_len);
         cudaDeviceSynchronize();
-
-        // ErrorCheck(cudaMemcpy(copyE, E, sizeof(int) * slice_len, cudaMemcpyDeviceToHost), __FILE__, __LINE__);
-        // for(int i = 0; i < slice_len; i++){
-        //     printf("E[%d] = %d\n", i, copyE[i]);
-        // }
         
         for(int i = 0; i < outer_diag; i++){
-            printf("%d/%d\n", i, outer_diag);
+            printf("%d/%d\n", i, outer_diag-1);
             //計算前半段
             cal_first_phase<<<blocksPerGridForSW, threadsPerBlockForSW>>>(i, R, C, strlen(slice), strlen(mtDNA_slice), E, F, H, global_max_score, global_max_i, global_max_j);
             cudaDeviceSynchronize();
@@ -125,8 +120,19 @@ int main(){
             cal_second_phase<<<blocksPerGridForSW, threadsPerBlockForSW>>>(i, R, C, strlen(slice), strlen(mtDNA_slice), E, F, H, global_max_score, global_max_i, global_max_j);
             cudaDeviceSynchronize();
         }
+
+        if(strlen(mtDNA_slice) % threadsPerBlockForSW != 0){
+            threadsPerBlock = strlen(mtDNA_slice) % threadsPerBlockForSW;
+            int start_row = (strlen(mtDNA_slice) / threadsPerBlockForSW) * threadsPerBlockForSW + 1; 
+            //計算剩餘的子矩陣
+            for(int i = 0; i <= blocksPerGridForSW; i++){
+                int iter = i == blocksPerGridForSW ? threadsPerBlock - 1 : C;
+                do_rest_row <<<1, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, threadsPerBlock, start_row, slice_len, iter, C, E, F, H, global_max_score, global_max_i, global_max_j);
+                cudaDeviceSynchronize();    
+            }
+        }
         
-        //check_matrix(copyH, H, mtDNA_slice, slice_len);
+        check_matrix(copyH, H, mtDNA_slice, slice_len);
 
         //把H最後一行數值搬到第一行，提供下一個子矩陣計算
         threadsPerBlock = 13;
@@ -135,6 +141,7 @@ int main(){
         cudaDeviceSynchronize();
 
     }
+    
     end = clock();
     double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
 

@@ -90,7 +90,7 @@ void local_alignment(int *H, int *E, char *reference, char *query, Result *resul
 
             cur_H = MAX(0, MAX((dig_H + match), MAX(E[j], F)));
 
-            if(result->maxScore < cur_H){
+            if(result->maxScore <= cur_H){
                 result->maxScore = cur_H;
                 result->row = i;
                 result->col = j;
