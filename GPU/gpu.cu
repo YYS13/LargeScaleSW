@@ -97,7 +97,7 @@ int main(){
     // 開始計算
     start = clock();
     for(int epoch = 0; epoch <= strlen(nDNA) - nDNA_slice_len; epoch += nDNA_slice_len){
-        if(epoch/nDNA_slice_len + 1 == 4) break;
+        //if(epoch/nDNA_slice_len + 1 == 4) break;
         printf("Epoch %d/%d\n", epoch/nDNA_slice_len + 1, (int)(strlen(nDNA)/nDNA_slice_len));
         char* slice = substring(nDNA, epoch, nDNA_slice_len);
         // copy nDNA 到 constant memory

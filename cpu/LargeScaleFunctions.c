@@ -77,7 +77,7 @@ int* initialize_vector(long long len, int val){
 //caculate local alignment
 void local_alignment(int *H, int *E, char *reference, char *query, Result *result){
     for(int i = 1; i <= strlen(query); i++){
-        //printf("%d / %ld\n", i, strlen(query));
+        printf("%d / %zu\n", i, strlen(query));
         int dig_H = 0;
         int cur_H = 0;
         int F = INT_MIN - EXTEND_GAP;
