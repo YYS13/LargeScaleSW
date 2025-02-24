@@ -243,7 +243,7 @@ __global__ void move_data(int *H, int mtDNA_len, int slice_len){
  */
 
 
-__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
+__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
     //放比對分數
     __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
@@ -267,7 +267,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
     if(j < 1){
         i = i - gridDim.x * R;
-        j = slice_len + j;
+        j = rest_len + j;
     }
 
 
@@ -277,7 +277,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
         // if(blockIdx.x == 0){
         //     printf("tid = %d, round = %d, cell = (%d, %d)\n", threadIdx.x, times+1, i, j);
         // }
-        if(i >= 1 && i <= (mtDNA_len / blockDim.x) * blockDim.x){
+        if(i >= 1 && i <= (mtDNA_len / blockDim.x) * blockDim.x && j <= rest_len){
             
             E[j-1] = max2(E[j-1] + shared_panalty[2], H[(i-1) * (slice_len + 1) + j] + shared_panalty[3]);
 
@@ -299,7 +299,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
         j++;
         // 是否結束 cell delegation 回去原本的位置繼續做
-        if(j == slice_len + 1){
+        if(j == rest_len + 1){
             j = 1;
             i = i + gridDim.x * R; 
         }
@@ -323,7 +323,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
             atomicMax(global_max_score, max_score);
             if (*global_max_score == max_score) {
                 *global_max_i = max_i;
-                *global_max_j = max_j;
+                *global_max_j = start_col + max_j;
             }
         
         }
@@ -335,7 +335,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
 }
 
-__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
+__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
     //放比對分數
     __shared__ int shared_panalty[4];
     //紀錄 block 內最大值
@@ -363,7 +363,7 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
 
     //開始計算
     for(int times = 0; times < (C - R); times++){
-        if(i >= 1 && i <= (mtDNA_len / blockDim.x) * blockDim.x){
+        if(i >= 1 && i <= (mtDNA_len / blockDim.x) * blockDim.x && j <= rest_len){
             E[j-1] = max2(E[j-1] + shared_panalty[2], H[(i-1) * (slice_len + 1) + j] + shared_panalty[3]);
 
             F[i-1] = max2(F[i-1] + shared_panalty[2], H[i * (slice_len + 1) + (j-1)] + shared_panalty[3]);
@@ -401,7 +401,7 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
             atomicMax(global_max_score, max_score);
             if (*global_max_score == max_score) {
                 *global_max_i = max_i;
-                *global_max_j = max_j;
+                *global_max_j = start_col + max_j;
             }
         
         }
@@ -411,7 +411,7 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
     }
 }
 
-__global__ void do_rest_row(int round, int restRows, int start_row, int slice_len, int iter, int C, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j){
+__global__ void do_rest_row(int round, int restRows, int start_row, int slice_len, int iter, int C, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
     //放比對分數
     __shared__ int shared_panalty[4];
     //紀錄 block 內最大值
@@ -436,7 +436,7 @@ __global__ void do_rest_row(int round, int restRows, int start_row, int slice_le
     //計算
     for(int times = 0; times < iter; times++){
         //if(round == 3) printf("shift = %d, tid = %d, deal(%d, %d)\n", times, threadIdx.x, i, j);
-        if(j >= 1 && j <= slice_len){
+        if(j >= 1 && j <= rest_len){
             E[j-1] = max2(E[j-1] + shared_panalty[2], H[(i-1) * (slice_len + 1) + j] + shared_panalty[3]);
 
             F[i-1] = max2(F[i-1] + shared_panalty[2], H[i * (slice_len + 1) + (j-1)] + shared_panalty[3]);
@@ -475,7 +475,7 @@ __global__ void do_rest_row(int round, int restRows, int start_row, int slice_le
             atomicMax(global_max_score, max_score);
             if (*global_max_score == max_score) {
                 *global_max_i = max_i;
-                *global_max_j = max_j;
+                *global_max_j = start_col + max_j;
             }
         
         }
