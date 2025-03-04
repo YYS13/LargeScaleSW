@@ -21,7 +21,7 @@ struct Result{
 
 
 __constant__ char device_mtDNA[53];
-__constant__ char device_nDNA[25];
+__constant__ char device_nDNA[26];
 __constant__ int panalty[4];
 
 cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNumber)

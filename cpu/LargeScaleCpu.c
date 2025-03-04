@@ -16,7 +16,7 @@ int main(){
     nDNA = read_from_file("../data/nDNA.txt");
     mtDNA = read_from_file("../data/mtDNA.txt");
     //test data
-    char *nDNA_slice = substring(nDNA, 0, 25000);
+    char *nDNA_slice = substring(nDNA, 0, 34970);
     char *mtDNA_slice = substring(mtDNA, 0, strlen(mtDNA));
     // printf("nDNA : %s\n", nDNA_slice);
     // printf("mtDNA : %s\n", mtDNA_slice);

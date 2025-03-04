@@ -11,7 +11,7 @@ int main(){
     char *mtDNA = read_from_file("../data/mtDNA.txt");
 
     //test data
-    char *nDNA_slice = substring(nDNA, 0, 68);
+    char *nDNA_slice = substring(nDNA, 0, 92);
     char *mtDNA_slice = substring(mtDNA, 0, 43);
 
     printf("nDNA : %s\n", nDNA_slice);
@@ -91,7 +91,7 @@ int main(){
 
     //設定計算 blocks & threads 數
     int threadsPerBlockForSW = 4;
-    int blocksPerGridForSW = 4;
+    int blocksPerGridForSW = 3;
     int outer_diag = blocksPerGridForSW + (strlen(mtDNA_slice) / threadsPerBlockForSW);
     int R = threadsPerBlockForSW;
     int C = slice_len / blocksPerGridForSW;
@@ -157,6 +157,8 @@ int main(){
         cudaDeviceSynchronize();
 
         //重新計算 outer_dig 、R 、C
+        blocksPerGridForSW = 4;
+        threadsPerBlockForSW = 2;
         outer_diag = blocksPerGridForSW + (strlen(mtDNA_slice) / threadsPerBlockForSW);
         R = threadsPerBlockForSW;
         C = rest_DNA_len / blocksPerGridForSW;
@@ -187,8 +189,9 @@ int main(){
                 cudaDeviceSynchronize();    
             }
         }
+
+        check_matrix(copyH, H, mtDNA_slice, slice_len);
     }
-    check_matrix(copyH, H, mtDNA_slice, slice_len);
     
     end = clock();
     double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）

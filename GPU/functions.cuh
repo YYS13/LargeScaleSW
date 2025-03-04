@@ -7,7 +7,7 @@
 #define OPEN_GAP -5
 #define EXTEND_GAP -1
 #define SCORE_SIZE 4
-#define THREADS_PER_BLOCK 126
+#define THREADS_PER_BLOCK 192
 #define MTDNA_LEN 33612
 
 
@@ -55,8 +55,8 @@ __host__ void replaceN(char *sequence){
 
 }
 
-__host__ int find_best_blocks(int slice_len, int threads, int blocksPerGrid){
-    while(slice_len % blocksPerGrid != 0 || threads > slice_len / blocksPerGrid){
+__host__ int find_best_blocks(int slice_len, int blocksPerGrid){
+    while(slice_len % blocksPerGrid != 0){
         blocksPerGrid --;
     }
     return blocksPerGrid;
@@ -277,9 +277,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
     //放比對分數
     __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
-    __shared__ int block_max_score[THREADS_PER_BLOCK]; // Block 內各tid最大值
-    __shared__ int block_max_i[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 i
-    __shared__ int block_max_j[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 j
+    extern __shared__ Result cellValues[];
 
     //把 penalty score 搬到 shared memory 中
     if(threadIdx.x == 0){
@@ -287,9 +285,9 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
             shared_panalty[i] = panalty[i];
         }
     }
-    block_max_score[threadIdx.x] = 0;
-    block_max_i[threadIdx.x] = 0;
-    block_max_j[threadIdx.x] = 0;
+    cellValues[threadIdx.x].score = 0;
+    cellValues[threadIdx.x].i = 0;
+    cellValues[threadIdx.x].j = 0;
     __syncthreads();
 
     int i, j; //計算各 thread 負責的起始位置
@@ -320,9 +318,9 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
 
             //儲存 H[i][j] 和其位置到 shared memory 中
-            block_max_score[threadIdx.x] = curV;
-            block_max_i[threadIdx.x] = i;
-            block_max_j[threadIdx.x] = j;
+            cellValues[threadIdx.x].score = curV;
+            cellValues[threadIdx.x].i = i;
+            cellValues[threadIdx.x].j = j;
         }
 
         j++;
@@ -339,10 +337,10 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
             int max_score = 0, max_i = -1, max_j = -1;
             
             for (int k = 0; k < R; k++) {
-                if (block_max_score[k] > max_score) {
-                    max_score = block_max_score[k];
-                    max_i = block_max_i[k];
-                    max_j = block_max_j[k];
+                if (cellValues[k].score > max_score) {
+                    max_score = cellValues[k].score;
+                    max_i = cellValues[k].i;
+                    max_j = cellValues[k].j;
                 }
             }
 
@@ -366,9 +364,7 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
     //放比對分數
     __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
-    __shared__ int block_max_score[THREADS_PER_BLOCK]; // Block 內各tid最大值
-    __shared__ int block_max_i[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 i
-    __shared__ int block_max_j[THREADS_PER_BLOCK];     // Block 內各tid最大值對應的 j
+    extern __shared__ Result cellValues[];
     
     //把 penalty score 搬到 shared memory 中
     if(threadIdx.x == 0){
@@ -377,9 +373,9 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
         }
     }
 
-    block_max_score[threadIdx.x] = 0;
-    block_max_i[threadIdx.x] = 0;
-    block_max_j[threadIdx.x] = 0;
+    cellValues[threadIdx.x].score = 0;
+    cellValues[threadIdx.x].i = 0;
+    cellValues[threadIdx.x].j = 0;
 
     __syncthreads();
 
@@ -404,9 +400,9 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
             //if(i == 2 && j== 23) printf("H[2][23] = %d\n", H[i * (slice_len + 1) + j]);
 
             //儲存 H[i][j] 和其位置到 shared memory 中
-            block_max_score[threadIdx.x] = curV;
-            block_max_i[threadIdx.x] = i;
-            block_max_j[threadIdx.x] = j;
+            cellValues[threadIdx.x].score = curV;
+            cellValues[threadIdx.x].i = i;
+            cellValues[threadIdx.x].j = j;
         }
         j++;
 
@@ -417,10 +413,10 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
             int max_score = 0, max_i = -1, max_j = -1;
             
             for (int k = 0; k < R; k++) {
-                if (block_max_score[k] > max_score) {
-                    max_score = block_max_score[k];
-                    max_i = block_max_i[k];
-                    max_j = block_max_j[k];
+                if (cellValues[k].score > max_score) {
+                    max_score = cellValues[k].score;
+                    max_i = cellValues[k].i;
+                    max_j = cellValues[k].j;
                 }
             }
 
