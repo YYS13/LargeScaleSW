@@ -5,17 +5,18 @@
 
 
 int main(){
+    int start = clock();
     // load sequence
     char *nDNA = read_from_file("../data/nDNA.txt");
     char *mtDNA = read_from_file("../data/mtDNA.txt");
+    mtDNA = substring(mtDNA, 0, 16806);
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("mtDNA length = %zu\n", strlen(mtDNA));
 
-    nDNA = substring(nDNA, 0, 7890);
     //mtDNA = substring(mtDNA, 0, 10);
 
     //決定片段長度
-    int nDNA_slice_len = 2000;
+    int nDNA_slice_len = 10000;
 
     //initialize matrix
     int **H = initialize_matrix(strlen(mtDNA), nDNA_slice_len);
@@ -66,6 +67,9 @@ int main(){
     }
 
     printf("max score = %d at (%d, %lld)\n", result.maxScore, result.row, result.col);
+    int end = clock();
+    double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
+
 
     // printf("\nE: \n");
     // printMatrix(E, strlen(query) + 1, strlen(reference) + 1);
@@ -83,6 +87,10 @@ int main(){
     free(H);
     free(E);
     free(F);
+
+    // 打印執行時間
+    printf("total time: %.6f seconds\n", elapsed_time);
+    convert_time(elapsed_time);
 
     return 0;
 }

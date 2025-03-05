@@ -200,3 +200,16 @@ void copy_data(int **dst, int **src, int mtDNA_len){
         dst[i][0] = src[i][0];
     }
 }
+
+void convert_time(double total_seconds) {
+    int days = (int)(total_seconds / (24 * 3600));       
+    total_seconds = fmod(total_seconds, 24 * 3600);      
+
+    int hours = (int)(total_seconds / 3600);             
+    total_seconds = fmod(total_seconds, 3600);           
+
+    int minutes = (int)(total_seconds / 60);             
+    int seconds = (int)fmod(total_seconds, 60);         
+
+    printf("Elapsed time: %d days, %d hours, %d minutes, %d seconds\n", days, hours, minutes, seconds);
+}
