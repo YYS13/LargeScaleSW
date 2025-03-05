@@ -25,6 +25,7 @@ int main(){
     // 讀取數據
     char *nDNA = read_from_file("../data/nDNA.txt");
     char *mtDNA = read_from_file("../data/mtDNA.txt");
+    mtDNA = substring(mtDNA, 0, 16806);
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("mtDNA length = %zu\n", strlen(mtDNA));
 

@@ -7,8 +7,7 @@
 #define OPEN_GAP -5
 #define EXTEND_GAP -1
 #define SCORE_SIZE 4
-#define THREADS_PER_BLOCK 192
-#define MTDNA_LEN 33612
+#define MTDNA_LEN 16806
 
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -21,8 +20,8 @@ struct Result{
 };
 
 
-__constant__ char device_mtDNA[33613];
-__constant__ char device_nDNA[7681];
+__constant__ char device_mtDNA[16807];
+__constant__ char device_nDNA[15161];
 __constant__ int panalty[4];
 
 cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNumber)
@@ -63,7 +62,12 @@ __host__ int find_best_blocks(int slice_len, int blocksPerGrid){
 }
 
 __host__ int find_max_slice_len(int mtDNA_len, size_t global_memory_size, int blocks){
-    int slice_len = (global_memory_size - ((2 * mtDNA_len + 1) * 32)) / (33140 * 32);
+    int w = global_memory_size / 32;
+    int numerator = w - (2 * mtDNA_len + 1);
+    int denominator = mtDNA_len + 2;
+    int slice_len = numerator / denominator;
+    printf("mtDNA length = %d\n", mtDNA_len);
+    printf("slice_len = %d\n", slice_len);
 
     for(int i = slice_len; i >= 0; --i){
         if(i % blocks == 0) return i;
