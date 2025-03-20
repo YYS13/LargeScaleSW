@@ -1,6 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define MATCH 3
 #define MISMATCH -1
@@ -166,6 +167,36 @@ void check_matrix(int *copyH, int *H, char *mtDNA_slice, int slice_len){
         }
         printf("\n");
     }
+}
+
+void printArray(int *array, size_t size){
+    printf("[");
+    for(long long i = 0; i < (long long)size; i++){
+        printf("%d, ", array[i]);
+    }
+    printf("]\n");
+}
+
+int save_result_to_file(int* array, size_t size, const char *filename){
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        perror("fopen");
+        return -1;  // 開檔失敗
+    }
+
+    for(long long i = 0; i < (long long) size; i++){
+        double log;
+        if(array[i] != 0){
+            log = log2((double)array[i]);
+        }else{
+            log = 0.0;
+        }
+        fprintf(fp, "%.1f\n", log);
+    }
+
+    fclose(fp);
+
+    return 0;
 }
 
 

@@ -2,7 +2,7 @@
 
 
 int main(){
-    clock_t start, end;
+    clock_t start, end1, end2;
     // 設定由哪個 gpu 執行
     int device_id = 0;
     ErrorCheck(cudaSetDevice(device_id), __FILE__, __LINE__);
@@ -25,6 +25,10 @@ int main(){
     // 讀取數據
     char *nDNA = read_from_file("../data/nDNA.txt");
     char *mtDNA = read_from_file("../data/mtDNA.txt");
+
+    //分配 nDNA 每個位置結果儲存陣列
+    int *result_position = (int *)malloc(strlen(nDNA) * sizeof(int));
+    
     mtDNA = substring(mtDNA, 0, 16806);
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("mtDNA length = %zu\n", strlen(mtDNA));
@@ -127,13 +131,23 @@ int main(){
                 cudaDeviceSynchronize();    
             }
         }
-        
+
+        //把結果複製到result_position
+        ErrorCheck(cudaMemcpy(result_position + epoch, H + MTDNA_LEN * (nDNA_slice_len + 1) + 1, nDNA_slice_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
 
         //把H最後一行數值搬到第一行，提供下一個子矩陣計算
         blocks = ((MTDNA_LEN + threadsPerBlock - 1) / threadsPerBlock) + 1;
         move_data<<<blocks, threadsPerBlock>>>(H, MTDNA_LEN, nDNA_slice_len);
         cudaDeviceSynchronize();
     }
+
+    end1 = clock();
+    double elapsed_time = (double)(end1 - start) / CLOCKS_PER_SEC;
+    // 打印執行時間
+    printf("first stage take %.6f seconds\n", elapsed_time);
+    convert_time(elapsed_time);
+
+
 
     //計算剩下部份
     int rest_nDNA_len = strlen(nDNA) % nDNA_slice_len;
@@ -182,12 +196,13 @@ int main(){
             }
         }
 
-        
+        ErrorCheck(cudaMemcpy(result_position + strlen(nDNA) - rest_nDNA_len, H + MTDNA_LEN * (nDNA_slice_len + 1) + 1, rest_nDNA_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
     }
 
+    end2 = clock();
+    elapsed_time = (double)(end2 - end1) / CLOCKS_PER_SEC;
 
-    end = clock();
-    double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
+    save_result_to_file(result_position, strlen(nDNA), "../output/result.txt", false);
 
     //打印最大值
     int maxScore, maxI;
@@ -201,6 +216,7 @@ int main(){
     free(mtDNA);
     free(copyH);
     free(panalty_score);
+    free(result_position);
 
     // 釋放 gpu 記憶體空間
     cudaFree(H);
@@ -213,5 +229,7 @@ int main(){
     // 打印執行時間
     printf("total time: %.6f seconds\n", elapsed_time);
     convert_time(elapsed_time);
+
+    system("python3 ../cpu/draw.py");
     return 0;
 }

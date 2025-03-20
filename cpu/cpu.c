@@ -5,7 +5,7 @@
 
 
 int main(){
-    int start = clock();
+    clock_t start = clock();
     // load sequence
     char *nDNA = read_from_file("../data/nDNA.txt");
     char *mtDNA = read_from_file("../data/mtDNA.txt");
@@ -67,7 +67,7 @@ int main(){
     }
 
     printf("max score = %d at (%d, %lld)\n", result.maxScore, result.row, result.col);
-    int end = clock();
+    clock_t end = clock();
     double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
 
 

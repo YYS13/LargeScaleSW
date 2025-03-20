@@ -11,11 +11,12 @@ int main(){
     char *mtDNA = read_from_file("../data/mtDNA.txt");
 
     //test data
-    char *nDNA_slice = substring(nDNA, 0, 92);
+    char *nDNA_slice = substring(nDNA, 0, 55);
     char *mtDNA_slice = substring(mtDNA, 0, 43);
 
     printf("nDNA : %s\n", nDNA_slice);
     printf("mtDNA : %s\n", mtDNA_slice);
+    int *result_position = (int *)calloc(strlen(nDNA_slice), sizeof(int));
 
     int slice_len = 24;
 
@@ -133,6 +134,8 @@ int main(){
         }
         
         check_matrix(copyH, H, mtDNA_slice, slice_len);
+        // 把最後一行結果複製到 cpu 端存起來
+        ErrorCheck(cudaMemcpy(result_position + epoch, H + (int)strlen(mtDNA_slice) * (slice_len + 1) + 1, slice_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
 
         //把H最後一行數值搬到第一行，提供下一個子矩陣計算
         threadsPerBlock = 13;
@@ -191,10 +194,17 @@ int main(){
         }
 
         check_matrix(copyH, H, mtDNA_slice, slice_len);
+
+        ErrorCheck(cudaMemcpy(result_position + strlen(nDNA_slice) - rest_DNA_len, H + (int)strlen(mtDNA_slice) * (slice_len + 1) + 1, rest_DNA_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
+        
     }
+
+    //printArray(result_position, strlen(nDNA_slice));
     
     end = clock();
     double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;  // 计算耗时（秒）
+
+    save_result_to_file(result_position, strlen(nDNA_slice), "../output/test.txt");
 
     int maxScore, maxI, maxJ;
     cudaMemcpy(&maxScore, global_max_score, sizeof(int), cudaMemcpyDeviceToHost);
@@ -217,5 +227,7 @@ int main(){
     // 打印執行時間
     printf("total time: %.6f seconds\n", elapsed_time);
     convert_time(elapsed_time);
+
+    system("python3 ../cpu/draw.py");
 
 }
