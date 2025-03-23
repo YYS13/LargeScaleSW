@@ -40,7 +40,7 @@ int main(){
         // fill E with -∞
         fill_vector(E, INT_MIN - EXTEND_GAP, (strlen(slice) + 1));
         // caculate submatrix
-        local_alignment(H, E, F, slice, mtDNA, &result, epoch * nDNA_slice_len);
+        local_alignment(H, E, F, slice, mtDNA, &result, (long long)epoch);
         //printf("H: \n");
         //printMatrix(H, strlen(mtDNA) + 1, nDNA_slice_len + 1);
         //move data to first row
@@ -57,7 +57,7 @@ int main(){
         fill_vector(rest_E, INT_MIN - EXTEND_GAP, (rest_len + 1));
         int **rest_H = initialize_matrix(strlen(mtDNA), rest_len);
         copy_data(rest_H, H, strlen(mtDNA));
-        local_alignment(rest_H, rest_E, F, rest_slice, mtDNA, &result, (strlen(nDNA) / nDNA_slice_len) * nDNA_slice_len);
+        local_alignment(rest_H, rest_E, F, rest_slice, mtDNA, &result, (long)(long)((strlen(nDNA) / nDNA_slice_len) * nDNA_slice_len));
         //printf("rest_H: \n");
         //printMatrix(rest_H, strlen(mtDNA) + 1, rest_len + 1);
 

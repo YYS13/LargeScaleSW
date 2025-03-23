@@ -61,16 +61,17 @@ __host__ int find_best_blocks(int slice_len, int blocksPerGrid){
     return blocksPerGrid;
 }
 
-__host__ int find_max_slice_len(int mtDNA_len, size_t global_memory_size, int blocks){
-    int w = global_memory_size / 32;
-    int numerator = w - (2 * mtDNA_len + 1);
-    int denominator = mtDNA_len + 2;
+__host__ int find_max_slice_len(int mtDNA_len, size_t global_memory_size, int threadsPerBlock){
+    printf("GPU MAX Memory = %zu\n", global_memory_size);
+    int C = threadsPerBlock * 2;
+    size_t K = global_memory_size / 32;
+    long long numerator   = (long long)K - (2LL * mtDNA_len + 1LL);
+    long long denominator = (long long)mtDNA_len + 2LL;
     int slice_len = numerator / denominator;
-    printf("mtDNA length = %d\n", mtDNA_len);
-    printf("slice_len = %d\n", slice_len);
+    printf("最大可配置 nDNA slice = %d\n", slice_len);
 
     for(int i = slice_len; i >= 0; --i){
-        if(i % blocks == 0) return i;
+        if(i % C == 0) return i;
     }
 
     return 0;

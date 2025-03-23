@@ -94,7 +94,7 @@ void reverseString(char *str) {
     }
 }
 
-void local_alignment(int **H, int *E, int *F, char *reference, char *query, Result *result, int start_col){
+void local_alignment(int **H, int *E, int *F, char *reference, char *query, Result *result, long long start_col){
     int m = strlen(query);
     int n = strlen(reference);
     for(int i = 1; i <= m; i++){

@@ -3,7 +3,7 @@
 
 int main(){
     // 讀取數據
-    char *nDNA = read_from_file("../data/GRCh38.chromosome2.txt");
+    char *nDNA = read_from_file("../data/1.txt");
     char *nc1 = read_from_file("../data/NC_012920.1.txt");
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("NC_012920.1 length = %zu \n", strlen(nc1));

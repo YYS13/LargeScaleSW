@@ -28,7 +28,7 @@ void fill_vector(int *vector, int value, int length);
 
 void reverseString(char *str);
 
-void local_alignment(int **H, int *E, int *F, char *reference, char *query, Result *result, int start_col);
+void local_alignment(int **H, int *E, int *F, char *reference, char *query, Result *result, long long start_col);
 
 void printMatrix(int **matrix, int rows, int cols);
 
