@@ -20,8 +20,8 @@ struct Result{
 };
 
 
-__constant__ char device_mtDNA[16807];
-__constant__ char device_nDNA[15161];
+__constant__ char device_mtDNA[33613];
+__constant__ char device_nDNA[20000];
 __constant__ int panalty[4];
 
 cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNumber)
@@ -54,11 +54,12 @@ __host__ void replaceN(char *sequence){
 
 }
 
-__host__ int find_best_blocks(int slice_len, int blocksPerGrid){
-    while(slice_len % blocksPerGrid != 0){
-        blocksPerGrid --;
+__host__ int find_best_divC(int slice_len, int threadsPerBlock){
+    int C = threadsPerBlock * 2;
+    while(slice_len % C != 0){
+        C--;
     }
-    return blocksPerGrid;
+    return C;
 }
 
 __host__ int find_max_slice_len(int mtDNA_len, size_t global_memory_size, int threadsPerBlock){
@@ -210,8 +211,25 @@ void check_matrix(int *copyH, int *H, char *mtDNA_slice, int slice_len){
     }
 }
 
-int save_result_to_file(int* array, size_t size, const char *filename, bool doLog){
-    FILE *fp = fopen(filename, "w");
+int save_result_to_file(int* array, size_t size, char *nDNAPath, bool doLog, char *expand){
+    char prefix[50] = "../output/";
+    if(atoi(expand) == 1){
+        strcat(prefix,"(expand)");
+    }
+    if(doLog){
+        strcat(prefix,"(log)");
+    }
+    char *filename = strrchr(nDNAPath, '/');
+    if(filename){
+        filename++;
+    }else{
+        filename = nDNAPath;
+    }
+
+    strcat(prefix, filename);
+
+
+    FILE *fp = fopen(prefix, "w");
     if (!fp) {
         perror("fopen");
         return -1;  // 開檔失敗
@@ -231,6 +249,27 @@ int save_result_to_file(int* array, size_t size, const char *filename, bool doLo
             fprintf(fp, "%d\n", array[i]);
         }
     }
+
+    fclose(fp);
+
+    return 0;
+}
+
+
+int save_experiment(char *threads, int blocks, double time, char *expand, int maxScore, int maxI, long long maxJ){
+    char filename[50] = "experiment";
+    char code[7];
+    snprintf(code, sizeof(code), "_%d.txt", atoi(expand));
+    strcat(filename, code);
+    FILE *fp = fopen(filename, "a");
+    if (!fp) {
+        perror("fopen");
+        return -1;  // 開檔失敗
+    }
+    
+    fprintf(fp, "%d Threads %d Blocks %.3f Sec Max score = %d at (%d, %lld)\n", atoi(threads), blocks, time, maxScore, maxI, maxJ);
+    
+
 
     fclose(fp);
 

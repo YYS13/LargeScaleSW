@@ -7,6 +7,7 @@ int main(int argc, char *argv[]){
         return 1;
     }
 
+
     clock_t start, end1, end2;
     // 設定由哪個 gpu 執行
     int device_id = 0;
@@ -38,6 +39,7 @@ int main(int argc, char *argv[]){
     // 根據 global memory 可配置最大空間 ，找尋最多可配置的 blocks 數(nDNA_slice_len 要整除 C)
     nDNA_slice_len = find_max_slice_len(mtDNA_len, prop.totalGlobalMem, threadsPerBlock);
     int blocksPerGrid = nDNA_slice_len / (2 * threadsPerBlock);
+    int writeBlocks = blocksPerGrid;
 
     printf("nDNA_slice_len = %d\n", nDNA_slice_len);
     printf("blocksPerGrid = %d\n", blocksPerGrid);
@@ -153,10 +155,10 @@ int main(int argc, char *argv[]){
 
     end1 = clock();
     double elapsed_time = (double)(end1 - start) / CLOCKS_PER_SEC;
+    double writeTime = elapsed_time;
     // 打印執行時間
     printf("first stage take %.6f seconds\n", elapsed_time);
     convert_time(elapsed_time);
-
 
 
     //計算剩下部份
@@ -165,10 +167,9 @@ int main(int argc, char *argv[]){
     if(rest_nDNA_len > 0){
         printf("nDNA 剩下長度 = %d\n", rest_nDNA_len);
         char *rest_slice = substring(nDNA, strlen(nDNA) - rest_nDNA_len, rest_nDNA_len);
+        long long start_col = strlen(nDNA) - rest_nDNA_len;
         // copy nDNA 到 constant memory
         ErrorCheck(cudaMemcpyToSymbol(device_nDNA, rest_slice, rest_nDNA_len + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
-        blocksPerGrid = find_best_blocks(rest_nDNA_len, blocksPerGrid);
-        threadsPerBlock = (rest_nDNA_len / blocksPerGrid) / 2;
         //fill E vector with -∞
         blocks = (nDNA_slice_len + threadsPerBlock - 1) / threadsPerBlock;
         fill_array_value<<<blocks, threadsPerBlock>>>(E, INT_MIN - EXTEND_GAP + 1, nDNA_slice_len);
@@ -179,11 +180,9 @@ int main(int argc, char *argv[]){
         ////重新計算 outer_dig 、R 、C
         outer_diag = blocksPerGrid + (mtDNA_len / threadsPerBlock);
         R = threadsPerBlock;
-        C = rest_nDNA_len / blocksPerGrid;
         printf("新的 R = %d, C = %d \n", R, C);
         printf("外部對角線共 : %d\n", outer_diag);
 
-        long long start_col = strlen(nDNA) - rest_nDNA_len;
         // 開始計算
         for(int i = 0; i < outer_diag; i++){
             //printf("%d/%d\n", i, outer_diag);
@@ -207,20 +206,25 @@ int main(int argc, char *argv[]){
         }
 
         ErrorCheck(cudaMemcpy(result_position + strlen(nDNA) - rest_nDNA_len, H + mtDNA_len * (nDNA_slice_len + 1) + 1, rest_nDNA_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
+        
     }
 
     end2 = clock();
     elapsed_time = (double)(end2 - end1) / CLOCKS_PER_SEC;
 
-    save_result_to_file(result_position, strlen(nDNA), "../output/result.txt", false);
-
     //打印最大值
-    int maxScore, maxI;
+    int maxScore = 0, maxI;
     long long maxJ;
     cudaMemcpy(&maxScore, global_max_score, sizeof(int), cudaMemcpyDeviceToHost);
     cudaMemcpy(&maxI, global_max_i, sizeof(int), cudaMemcpyDeviceToHost);
     cudaMemcpy(&maxJ, global_max_j, sizeof(long long), cudaMemcpyDeviceToHost);
     printf("max score = %d at (%d, %lld)  \n", maxScore, maxI, maxJ);
+    // 打印執行時間
+    printf("total time: %.6f seconds\n", elapsed_time);
+    convert_time(elapsed_time);
+    save_experiment(argv[3], writeBlocks, writeTime, argv[4], maxScore, maxI, maxJ);
+    save_result_to_file(result_position, strlen(nDNA), argv[2], false, argv[4]);
+    save_result_to_file(result_position, strlen(nDNA), argv[2], true, argv[4]);
     // 釋放 cpu 記憶體空間
     free(nDNA);
     free(mtDNA);
@@ -236,10 +240,7 @@ int main(int argc, char *argv[]){
     cudaFree(global_max_i);
     cudaFree(global_max_j);
 
-    // 打印執行時間
-    printf("total time: %.6f seconds\n", elapsed_time);
-    convert_time(elapsed_time);
 
-    system("python3 ../cpu/draw.py");
+    //system("python3 ../cpu/draw.py");
     return 0;
 }
