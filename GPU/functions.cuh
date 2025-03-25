@@ -7,7 +7,6 @@
 #define OPEN_GAP -5
 #define EXTEND_GAP -1
 #define SCORE_SIZE 4
-#define MTDNA_LEN 16806
 
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -21,7 +20,7 @@ struct Result{
 
 
 __constant__ char device_mtDNA[33613];
-__constant__ char device_nDNA[20000];
+__constant__ char device_nDNA[31500];
 __constant__ int panalty[4];
 
 cudaError_t ErrorCheck(cudaError_t error_code, const char* filename, int lineNumber)
