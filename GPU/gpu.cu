@@ -3,7 +3,7 @@
 
 int main(int argc, char *argv[]){
     if(argc != 5){
-        printf("用法: %s <mtDNA Data Path> <nDNA Data Path> <threads Per Block> <expand nDNA option 0 = no 1 = yes>\n", argv[0]);
+        printf("Usage: %s <mtDNA Data Path> <nDNA Data Path> <threads Per Block> <expand nDNA option 0 = no 1 = yes>\n", argv[0]);
         return 1;
     }
 

@@ -4,11 +4,16 @@
 #include "functions.c"
 
 
-int main(){
+int main(int argc, char *argv[]){
     clock_t start = clock();
     // load sequence
-    char *nDNA = read_from_file("../data/nDNA.txt");
-    char *mtDNA = read_from_file("../data/mtDNA.txt");
+    if(argc != 3){
+        printf("Wrong args count\n");
+        printf("Usage : %s <mtDNA Path> <nDNA Path> \n", argv[0]);
+    }
+    char *nDNA = read_from_file(argv[2]);
+    replaceN(nDNA);
+    char *mtDNA = read_from_file(argv[1]);
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("mtDNA length = %zu\n", strlen(mtDNA));
 

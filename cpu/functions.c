@@ -17,6 +17,21 @@ int max4(int a, int b, int c, int d) {
     return max2(max2(a,b), max2(c,d));
 }
 
+void replaceN(char *sequence){
+    if(sequence == NULL) return;
+
+    char bases[] = "ACGT";
+    srand(time(NULL));  
+
+    for (int i = 0; sequence[i] != '\0'; i++) {
+        if (sequence[i] == 'N') {
+            sequence[i] = bases[rand() % 4];  
+        }
+    }
+
+
+}
+
 void initialize_sequence(char **seq, int len){
     //鹼基集
     const char baseset[] = "ACGT";
