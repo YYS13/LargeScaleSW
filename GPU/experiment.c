@@ -14,5 +14,7 @@ int main(int argc, char *argv){
             system(command);
         }
     }
+
+    system("python3 draw.py");
     return 0;
 }

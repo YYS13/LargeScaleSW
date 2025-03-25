@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 class Drawer:
 
@@ -17,18 +19,35 @@ class Drawer:
         if self.data is None:
             print("No data loaded. Please call load_data() first.")
             return
+        dirs = self.filename.split('/')
+        file = dirs[len(dirs) - 1][:-4]
+        print(file)
+        ylabel = "Score"
+        title = file
+        if(file.find("(log)") >= 0):
+            ylabel = ylabel + "(log2)"
+            title = title.replace("(log)", "chromosome")
+        else:
+            title = title[:-1] + "chromosome" + title[-1:]
+
+        print("title = {}\n".format(title))
+        print("ylabel = {}\n".format(ylabel))
 
         plt.plot(self.data, marker='o')
         plt.xlabel('Index')
-        plt.ylabel('Score(log2)')
-        plt.title('Result')
+        plt.ylabel(ylabel)
+        plt.title(title)
         plt.grid(True)
         plt.show()
 
 
 def main():
+    if len(sys.argv) < 2:
+        print("請輸入檔案名")
+        sys.exit(1)
+
     # 建立 MyDataPlotter 物件
-    plotter = Drawer("../output/result.txt")
+    plotter = Drawer("../output/" + sys.argv[1])
     # 讀取資料
     plotter.load_data()
     # 繪圖

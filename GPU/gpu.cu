@@ -18,6 +18,7 @@ int main(int argc, char *argv[]){
 
     // 讀取數據
     char *nDNA = read_from_file(argv[2]);
+    replaceN(nDNA);
     char *mtDNA = read_from_file(argv[1]);
 
     if(atoi(argv[4]) == 0){
