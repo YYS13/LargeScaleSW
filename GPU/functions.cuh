@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MATCH 3
-#define MISMATCH -1
+#define MATCH 2
+#define MISMATCH -3
 #define OPEN_GAP -5
-#define EXTEND_GAP -1
+#define EXTEND_GAP -2
 #define SCORE_SIZE 4
 
 

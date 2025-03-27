@@ -7,13 +7,16 @@
 int main(int argc, char *argv[]){
     clock_t start = clock();
     // load sequence
-    if(argc != 3){
+    if(argc != 4){
         printf("Wrong args count\n");
-        printf("Usage : %s <mtDNA Path> <nDNA Path> \n", argv[0]);
+        printf("Usage : %s <mtDNA Path> <nDNA Path> <expand nDNA option 0 = no 1 = yes>\n", argv[0]);
     }
     char *nDNA = read_from_file(argv[2]);
     replaceN(nDNA);
     char *mtDNA = read_from_file(argv[1]);
+    if(atoi(argv[3]) == 0){
+        mtDNA = substring(mtDNA, 0, 16806);
+    }
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("mtDNA length = %zu\n", strlen(mtDNA));
 
