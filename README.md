@@ -6,7 +6,6 @@
 
 This tool, referencing the aforementioned paper, optimizes the algorithm and GPU memory usage to implement a GPU-based version of local alignment with an affine gap. It is applied to align mtDNA and nDNA, which have significantly different lengths, but can in fact be used for any sequence alignment involving one short and one long sequence.
 ## How to use
-> **You need to expand your mtDNA data first if you want to use expand alignment function**
 ### CPU
 ```shell
 # switch to cpu.c folder first
