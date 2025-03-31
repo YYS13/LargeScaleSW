@@ -8,7 +8,7 @@ int main(int argc, char *argv[]){
     }
 
 
-    clock_t start, end1, end2;
+    clock_t start, end;
     // 設定由哪個 gpu 執行
     int device_id = 0;
     ErrorCheck(cudaSetDevice(device_id), __FILE__, __LINE__);
@@ -20,18 +20,16 @@ int main(int argc, char *argv[]){
     char *nDNA = read_from_file(argv[2]);
     replaceN(nDNA);
     char *mtDNA = read_from_file(argv[1]);
-
-    if(atoi(argv[4]) == 0){
-        mtDNA = substring(mtDNA, 0, 16806);
+    if(atoi(argv[4]) == 1){
+        mtDNA = expand_mtDNA(mtDNA);
     }
+    replaceN(mtDNA);
     int mtDNA_len = (int)strlen(mtDNA);
     //分配 nDNA 每個位置結果儲存陣列
-    int *result_position = (int *)malloc(strlen(nDNA) * sizeof(int));
+    Cell *result_position = (Cell *)malloc(strlen(nDNA) * sizeof(Cell));
     
     printf("nDNA length = %zu\n", strlen(nDNA));
     printf("mtDNA length = %d\n", mtDNA_len);
-    //各種參數設定
-    printf("GPU%d 最大 SMs 數量 = %d\n", device_id, prop.multiProcessorCount);
     int nDNA_slice_len;
 
     //設定 threads 數量
@@ -39,6 +37,11 @@ int main(int argc, char *argv[]){
     // 設定 C = 2R , 決定要使用的 blocks 數量
     // 根據 global memory 可配置最大空間 ，找尋最多可配置的 blocks 數(nDNA_slice_len 要整除 C)
     nDNA_slice_len = find_max_slice_len(mtDNA_len, prop.totalGlobalMem, threadsPerBlock);
+
+    //分配 gpu 中每行最大值儲存空間
+    Cell *col_max;
+    ErrorCheck(cudaMalloc((Cell**) &col_max, sizeof(Cell) * nDNA_slice_len), __FILE__, __LINE__);
+
     int blocksPerGrid = nDNA_slice_len / (2 * threadsPerBlock);
     int writeBlocks = blocksPerGrid;
 
@@ -74,7 +77,7 @@ int main(int argc, char *argv[]){
     int *H;
     ErrorCheck(cudaMalloc((int**)&H, sizeof(int) * (mtDNA_len + 1) * (nDNA_slice_len + 1)), __FILE__, __LINE__);
     ErrorCheck(cudaMemcpy(H, copyH, sizeof(int) * (mtDNA_len + 1) * (nDNA_slice_len + 1), cudaMemcpyHostToDevice), __FILE__, __LINE__);
-
+    free(copyH);
     // F
     int *F;
     ErrorCheck(cudaMalloc((int**) &F, sizeof(int) * mtDNA_len), __FILE__, __LINE__);
@@ -113,53 +116,51 @@ int main(int argc, char *argv[]){
     // 開始計算
     start = clock();
     for(int epoch = 0; epoch <= strlen(nDNA) - nDNA_slice_len; epoch += nDNA_slice_len){
-        //if(epoch/nDNA_slice_len + 1 == 3) break;
         printf("Epoch %d/%d\n", epoch/nDNA_slice_len + 1, (int)(strlen(nDNA)/nDNA_slice_len));
+        //初始 col_max score 值為 0
+        blocks = (nDNA_slice_len + threadsPerBlock - 1) / threadsPerBlock;
+        fill_array_cell_value<<<blocks, threadsPerBlock>>>(col_max, 0, nDNA_slice_len);
+        cudaDeviceSynchronize();
+        // copy nDNA slice 到 constant memory
         char* slice = substring(nDNA, epoch, nDNA_slice_len);
-        // copy nDNA 到 constant memory
         ErrorCheck(cudaMemcpyToSymbol(device_nDNA, slice, nDNA_slice_len + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
         //fill E vector with -∞
-        blocks = (nDNA_slice_len + threadsPerBlock - 1) / threadsPerBlock;
         fill_array_value<<<blocks, threadsPerBlock>>>(E, INT_MIN - EXTEND_GAP + 1, nDNA_slice_len);
         cudaDeviceSynchronize();
 
         
         for(int i = 0; i < outer_diag; i++){
-            //printf("%d/%d\n", i, outer_diag);
             //計算前半段
-            cal_first_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, (long long)epoch, nDNA_slice_len);
+            cal_first_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, (long long)epoch, nDNA_slice_len, col_max);
             cudaDeviceSynchronize();
             //計算後半段
-            cal_second_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, (long long)epoch, nDNA_slice_len);
+            cal_second_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, (long long)epoch, nDNA_slice_len, col_max);
             cudaDeviceSynchronize();
         }
 
+        //計算剩餘的子矩陣
         if(mtDNA_len % threadsPerBlock != 0){
             int restThreadsPerBlock = mtDNA_len % threadsPerBlock;
             int start_row = (mtDNA_len / threadsPerBlock) * threadsPerBlock + 1; 
-            //計算剩餘的子矩陣
             for(int i = 0; i <= blocksPerGrid; i++){
                 int iter = i == blocksPerGrid ? restThreadsPerBlock - 1 : C;
-                do_rest_row <<<1, restThreadsPerBlock, restThreadsPerBlock * sizeof(Result)>>>(i, restThreadsPerBlock, start_row, nDNA_slice_len, iter, C, E, F, H, global_max_score, global_max_i, global_max_j, (long long)epoch, nDNA_slice_len);
+                do_rest_row <<<1, restThreadsPerBlock, restThreadsPerBlock * sizeof(Result)>>>(i, restThreadsPerBlock, start_row, nDNA_slice_len, iter, C, E, F, H, global_max_score, global_max_i, global_max_j, (long long)epoch, nDNA_slice_len, col_max);
                 cudaDeviceSynchronize();    
             }
         }
+        
 
-        //把結果複製到result_position
-        ErrorCheck(cudaMemcpy(result_position + epoch, H + mtDNA_len * (nDNA_slice_len + 1) + 1, nDNA_slice_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
+        //把 col_max 結果複製到result_position
+        ErrorCheck(cudaMemcpy(result_position + epoch, col_max, nDNA_slice_len * sizeof(Cell), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
 
         //把H最後一行數值搬到第一行，提供下一個子矩陣計算
         blocks = ((mtDNA_len + threadsPerBlock - 1) / threadsPerBlock) + 1;
         move_data<<<blocks, threadsPerBlock>>>(H, mtDNA_len, nDNA_slice_len);
         cudaDeviceSynchronize();
+
+        free(slice);
     }
 
-    end1 = clock();
-    double elapsed_time = (double)(end1 - start) / CLOCKS_PER_SEC;
-    double writeTime = elapsed_time;
-    // 打印執行時間
-    printf("first stage take %.6f seconds\n", elapsed_time);
-    convert_time(elapsed_time);
 
 
     //計算剩下部份
@@ -167,31 +168,32 @@ int main(int argc, char *argv[]){
     
     if(rest_nDNA_len > 0){
         printf("nDNA 剩下長度 = %d\n", rest_nDNA_len);
+        blocks = (nDNA_slice_len + threadsPerBlock - 1) / threadsPerBlock;
+        fill_array_cell_value<<<blocks, threadsPerBlock>>>(col_max, 0, nDNA_slice_len);
+        cudaDeviceSynchronize();
         char *rest_slice = substring(nDNA, strlen(nDNA) - rest_nDNA_len, rest_nDNA_len);
         long long start_col = strlen(nDNA) - rest_nDNA_len;
-        // copy nDNA 到 constant memory
+        // copy nDNA slice 到 constant memory
         ErrorCheck(cudaMemcpyToSymbol(device_nDNA, rest_slice, rest_nDNA_len + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
         //fill E vector with -∞
-        blocks = (nDNA_slice_len + threadsPerBlock - 1) / threadsPerBlock;
         fill_array_value<<<blocks, threadsPerBlock>>>(E, INT_MIN - EXTEND_GAP + 1, nDNA_slice_len);
         cudaDeviceSynchronize();
 
-        printf("新的 blocksPerGrid = %d\n", blocksPerGrid);
-        printf("新的 threadsPerBlock = %d\n", threadsPerBlock);
-        ////重新計算 outer_dig 、R 、C
-        outer_diag = blocksPerGrid + (mtDNA_len / threadsPerBlock);
-        R = threadsPerBlock;
-        printf("新的 R = %d, C = %d \n", R, C);
-        printf("外部對角線共 : %d\n", outer_diag);
+        // printf("新的 blocksPerGrid = %d\n", blocksPerGrid);
+        // printf("新的 threadsPerBlock = %d\n", threadsPerBlock);
+        // ////重新計算 outer_dig 、R 、C
+        // outer_diag = blocksPerGrid + (mtDNA_len / threadsPerBlock);
+        // R = threadsPerBlock;
+        // printf("新的 R = %d, C = %d \n", R, C);
+        // printf("外部對角線共 : %d\n", outer_diag);
 
         // 開始計算
         for(int i = 0; i < outer_diag; i++){
-            //printf("%d/%d\n", i, outer_diag);
             //計算前半段
-            cal_first_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, start_col, rest_nDNA_len);
+            cal_first_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, start_col, rest_nDNA_len, col_max);
             cudaDeviceSynchronize();
             //計算後半段
-            cal_second_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, start_col, rest_nDNA_len);
+            cal_second_phase<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(Result)>>>(i, R, C, nDNA_slice_len, mtDNA_len, E, F, H, global_max_score, global_max_i, global_max_j, start_col, rest_nDNA_len, col_max);
             cudaDeviceSynchronize();
         }
 
@@ -201,17 +203,19 @@ int main(int argc, char *argv[]){
             //計算剩餘的子矩陣
             for(int i = 0; i <= blocksPerGrid; i++){
                 int iter = i == blocksPerGrid ? restThreadsPerBlock - 1 : C;
-                do_rest_row <<<1, restThreadsPerBlock, restThreadsPerBlock * sizeof(Result)>>>(i, restThreadsPerBlock, start_row, nDNA_slice_len, iter, C, E, F, H, global_max_score, global_max_i, global_max_j, start_col, rest_nDNA_len);
+                do_rest_row <<<1, restThreadsPerBlock, restThreadsPerBlock * sizeof(Result)>>>(i, restThreadsPerBlock, start_row, nDNA_slice_len, iter, C, E, F, H, global_max_score, global_max_i, global_max_j, start_col, rest_nDNA_len, col_max);
                 cudaDeviceSynchronize();    
             }
         }
 
-        ErrorCheck(cudaMemcpy(result_position + strlen(nDNA) - rest_nDNA_len, H + mtDNA_len * (nDNA_slice_len + 1) + 1, rest_nDNA_len * sizeof(int), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
-        
+        ErrorCheck(cudaMemcpy(result_position + strlen(nDNA) - rest_nDNA_len, col_max, rest_nDNA_len * sizeof(Cell), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
+        free(rest_slice);
     }
 
-    end2 = clock();
-    elapsed_time = (double)(end2 - end1) / CLOCKS_PER_SEC;
+    end = clock();
+    double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;
+    double writeTime = elapsed_time;
+
 
     //打印最大值
     int maxScore = 0, maxI;
@@ -229,11 +233,11 @@ int main(int argc, char *argv[]){
     // 釋放 cpu 記憶體空間
     free(nDNA);
     free(mtDNA);
-    free(copyH);
     free(panalty_score);
     free(result_position);
 
     // 釋放 gpu 記憶體空間
+    cudaFree(col_max);
     cudaFree(H);
     cudaFree(E);
     cudaFree(F);

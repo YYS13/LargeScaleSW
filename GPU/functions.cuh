@@ -18,6 +18,13 @@ struct Result{
     int j;
 };
 
+struct Cell{
+    int score;
+    int i;
+    long long j;
+};
+
+
 
 __constant__ char device_mtDNA[33613];
 __constant__ char device_nDNA[31500];
@@ -64,9 +71,8 @@ __host__ int find_best_divC(int slice_len, int threadsPerBlock){
 __host__ int find_max_slice_len(int mtDNA_len, size_t global_memory_size, int threadsPerBlock){
     printf("GPU MAX Memory = %zu\n", global_memory_size);
     int C = threadsPerBlock * 2;
-    size_t K = global_memory_size / 32;
-    long long numerator   = (long long)K - (2LL * mtDNA_len + 1LL);
-    long long denominator = (long long)mtDNA_len + 2LL;
+    long long numerator   = global_memory_size - (64LL * mtDNA_len + 32LL);
+    long long denominator = 32LL * (long long)mtDNA_len + 192LL;
     int slice_len = numerator / denominator;
     printf("最大可配置 nDNA slice = %d\n", slice_len);
 
@@ -200,17 +206,17 @@ void convert_time(double total_seconds) {
 }
 
 // 查看結果矩陣
-void check_matrix(int *copyH, int *H, char *mtDNA_slice, int slice_len){
-    ErrorCheck(cudaMemcpy(copyH, H, sizeof(int) * (strlen(mtDNA_slice) + 1) * (slice_len + 1), cudaMemcpyDeviceToHost), __FILE__, __LINE__);
-    for(int i = 0; i < (strlen(mtDNA_slice) + 1); i++){
-        for(int j = 0; j < (slice_len + 1); j++){
+void check_matrix(int *copyH, int m, long long n, int slice_len){
+    
+    for(int i = 0; i < m + 1; i++){
+        for(long long j = 0; j < n + 1; j++){
             printf("%d  ", copyH[i * (slice_len + 1) + j]);
         }
         printf("\n");
     }
 }
 
-int save_result_to_file(int* array, size_t size, char *nDNAPath, bool doLog, char *expand){
+int save_result_to_file(Cell* array, size_t size, char *nDNAPath, bool doLog, char *expand){
     char prefix[50] = "../output/";
     if(atoi(expand) == 1){
         strcat(prefix,"(expand)");
@@ -236,16 +242,16 @@ int save_result_to_file(int* array, size_t size, char *nDNAPath, bool doLog, cha
     if(doLog){
         for(long long i = 0; i < (long long) size; i++){
             double log;
-            if(array[i] != 0){
-                log = log2((double)array[i]);
+            if(array[i].score != 0){
+                log = log2((double)array[i].score);
             }else{
                 log = 0.0;
             }
-            fprintf(fp, "%.1f\n", log);
+            fprintf(fp, "%d\t%lld\t%.1f\n", array[i].i, array[i].j, log);
         }
     }else{
         for(long long i = 0; i < (long long) size; i++){
-            fprintf(fp, "%d\n", array[i]);
+            fprintf(fp, "%d\t%lld\t%d\n", array[i].i, array[i].j, array[i].score);
         }
     }
 
@@ -324,6 +330,14 @@ __global__ void fill_array_value(int *array, int value, size_t n){
     }
 }
 
+//fill cell with some value
+__global__ void fill_array_cell_value(Cell *array, int value, size_t n){
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx < n){
+        array[idx].score = value;
+    }
+}
+
 // submatrix 算完把最後一行資料搬到第一行
 
 __global__ void move_data(int *H, int mtDNA_len, int slice_len){
@@ -343,7 +357,7 @@ __global__ void move_data(int *H, int mtDNA_len, int slice_len){
  */
 
 
-__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
+__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len, Cell *col_max){
     //放比對分數
     __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
@@ -384,6 +398,11 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+            if(curV >= col_max[j-1].score){
+                col_max[j-1].score = curV;
+                col_max[j-1].i = i;
+                col_max[j-1].j = start_col + j;
+            }
             H[i * (slice_len + 1) + j] = curV;
 
 
@@ -395,7 +414,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
         j++;
         // 是否結束 cell delegation 回去原本的位置繼續做
-        if(j == rest_len + 1){
+        if(j == slice_len + 1){
             j = 1;
             i = i + gridDim.x * R; 
         }
@@ -430,7 +449,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
 }
 
-__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
+__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len, Cell *col_max){
     //放比對分數
     __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
@@ -465,6 +484,11 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
             int match = device_mtDNA[i - 1] == device_nDNA[j - 1] ? shared_panalty[0] : shared_panalty[1];
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+            if(curV >= col_max[j-1].score){
+                col_max[j-1].score = curV;
+                col_max[j-1].i = i;
+                col_max[j-1].j = start_col + j;
+            }
             //printf("H[i-1][j-1] + match = %d", H[(i - 1) * (slice_len + 1) + (j - 1)]);
             H[i * (slice_len + 1) + j] = curV;
             //if(i == 2 && j== 23) printf("H[2][23] = %d\n", H[i * (slice_len + 1) + j]);
@@ -505,7 +529,7 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
 }
 
 
-__global__ void do_rest_row(int round, int restRows, int start_row, int slice_len, int iter, int C, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
+__global__ void do_rest_row(int round, int restRows, int start_row, int slice_len, int iter, int C, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len, Cell *col_max){
     //放比對分數
     __shared__ int shared_panalty[4];
     //紀錄 block 內最大值
@@ -539,6 +563,11 @@ __global__ void do_rest_row(int round, int restRows, int start_row, int slice_le
 
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+            if(curV >= col_max[j-1].score){
+                col_max[j-1].score = curV;
+                col_max[j-1].i = i;
+                col_max[j-1].j = start_col + j;
+            }
             H[i * (slice_len + 1) + j] = curV;
 
 

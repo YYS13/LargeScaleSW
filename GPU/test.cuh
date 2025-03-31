@@ -3,10 +3,10 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MATCH 3
-#define MISMATCH -1
+#define MATCH 2
+#define MISMATCH -3
 #define OPEN_GAP -5
-#define EXTEND_GAP -1
+#define EXTEND_GAP -2
 #define SCORE_SIZE 4
 
 
@@ -274,7 +274,7 @@ __global__ void move_data(int *H, int mtDNA_len, int slice_len){
  */
 
 
-__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
+__global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len, int *col_max){
     //放比對分數
     __shared__ int shared_panalty[SCORE_SIZE];
     //紀錄 block 內最大值
@@ -318,7 +318,11 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
-        
+
+            if(curV > col_max[j-1]){
+                col_max[j-1] = curV;
+            }
+
             H[i * (slice_len + 1) + j] = curV;
 
 
@@ -330,7 +334,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
         j++;
         // 是否結束 cell delegation 回去原本的位置繼續做
-        if(j == rest_len + 1){
+        if(j == slice_len + 1){
             j = 1;
             i = i + gridDim.x * R; 
         }
@@ -366,7 +370,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
 }
 
-__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
+__global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, int mtDNA_len, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len, int *col_max){
     //放比對分數
     __shared__ int shared_panalty[4];
     //紀錄 block 內最大值
@@ -402,6 +406,10 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
             int match = device_mtDNA[i - 1] == device_nDNA[j - 1] ? shared_panalty[0] : shared_panalty[1];
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+
+            if(curV > col_max[j-1]){
+                col_max[j-1] = curV;
+            }
             //printf("H[i-1][j-1] + match = %d", H[(i - 1) * (slice_len + 1) + (j - 1)]);
             H[i * (slice_len + 1) + j] = curV;
             //if(i == 2 && j== 23) printf("H[2][23] = %d\n", H[i * (slice_len + 1) + j]);
@@ -442,7 +450,7 @@ __global__ void cal_second_phase(int outer_dig, int R,  int C, int slice_len, in
     }
 }
 
-__global__ void do_rest_row(int round, int restRows, int start_row, int slice_len, int iter, int C, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len){
+__global__ void do_rest_row(int round, int restRows, int start_row, int slice_len, int iter, int C, int *E, int *F, int *H, int *global_max_score, int *global_max_i, int *global_max_j, long long start_col, int rest_len, int *col_max){
     //放比對分數
     __shared__ int shared_panalty[4];
     //紀錄 block 內最大值
@@ -476,6 +484,10 @@ __global__ void do_rest_row(int round, int restRows, int start_row, int slice_le
 
 
             int curV = max4(E[j-1], F[i-1], H[(i - 1) * (slice_len + 1) + (j - 1)] + match, 0);
+            if(curV > col_max[j-1]){
+                col_max[j-1] = curV;
+            }
+
             H[i * (slice_len + 1) + j] = curV;
 
 
