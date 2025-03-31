@@ -12,8 +12,8 @@ class Drawer:
 
     def load_data(self):
         """從檔案讀取資料 (一行一個整數)，並存到 self.data"""
-        self.data = np.loadtxt(self.filename, dtype=float)
-
+        data = np.loadtxt(self.filename, dtype=float)
+        self.data = data[:, 2]
     def plot_data(self):
         """繪製折線圖"""
         if self.data is None:
