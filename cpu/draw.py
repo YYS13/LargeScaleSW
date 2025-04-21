@@ -23,7 +23,7 @@ class Drawer:
     def load_data(self):
         with open(self.filename, "r") as f:
             for line in tqdm(f.readlines()):
-                parts = line.strip().split()
+                parts = line.strip().split("\t")
                 if len(parts) == 3:
                     i, j, value = map(int, parts)
                     self.data.append((int(j), int(i), int(value)))
