@@ -26,22 +26,31 @@ class Drawer:
                 parts = line.strip().split("\t")
                 if len(parts) == 3:
                     i, j, value = map(int, parts)
-                    self.data.append((int(j), int(i), int(value)))
+                    if(value > self.threshold):
+                        self.data.append((int(j), int(i), int(value)))
+        print(len(self.data))
 
     def make_segment(self):
         curSeg = Segment(0)
         maxV = self.data[0][2]
         for idx in tqdm(range(1, len(self.data))):
-            if self.data[idx][1] - self.data[idx - 1][1] <  self.stride and self.data[idx][1] - self.data[idx - 1][1] >= 0:
-                maxV = max(maxV, self.data[idx][2])
+            if self.data[idx][0] - 1 == self.data[idx - 1][0]:
+                diff = self.data[idx][2] - self.data[idx - 1][2]
+                if self.data[idx][1] >= self.data[idx - 1][1] and (self.data[idx][1] - self.data[idx - 1][1] < self.stride)  and (((diff - 2) % 2  == 0) or ((diff + 3) % 2 == 0) or (diff % 2 == 0)):
+                    maxV = max(maxV, self.data[idx][2])
+                elif self.data[idx][1] == self.data[idx - 1][1]:
+                    maxV = max(maxV, self.data[idx][2])
+                else:
+                    curSeg.end = idx
+                    curSeg.maxV = maxV
+                    self.segments.append(curSeg)
+                    curSeg = Segment(idx)
             else:
                 curSeg.end = idx
                 curSeg.maxV = maxV
                 self.segments.append(curSeg)
                 curSeg = Segment(idx)
-        # for seg in self.segments:
-        #     print(seg.start, seg.end, seg.maxV)
-            
+
     def plot_data(self):
         """繪製折線圖"""
         for seg in tqdm(self.segments):
@@ -51,13 +60,14 @@ class Drawer:
             x = [p[0] for p in points]
             y = [p[1] for p in points]
             plt.plot(x, y)
-            plt.text(seg.end, y[len(y)-1], str(seg.maxV), fontsize=8)
+            # plt.text(seg.end, y[len(y)-1], str(seg.maxV), fontsize=8)
 
         path = self.filename.split("/")
         plt.xlabel("X")
         plt.ylabel("Y")
-        plt.title(path[len(path) -1])
+        plt.title("Chromosome" + path[len(path) -1][:-4])
         plt.show()
+        
 
         
 
@@ -77,7 +87,6 @@ def main():
     plotter.make_segment()
 
     print("Ploting")
-    # 繪圖
     plotter.plot_data()
 
 if __name__ == '__main__':

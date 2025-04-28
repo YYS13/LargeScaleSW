@@ -103,7 +103,7 @@ int main(int argc, char *argv[]){
 
     //fill F vector with -∞
     int blocks = (mtDNA_len + threadsPerBlock - 1) / threadsPerBlock;
-    fill_array_value<<<blocks, threadsPerBlock>>>(F, INT_MIN - EXTEND_GAP + 1, mtDNA_len);
+    fill_array_value<<<blocks, threadsPerBlock>>>(F, 0, mtDNA_len);
     cudaDeviceSynchronize();
 
     // 計算外部對角線次數以及一個 block 負責的矩陣大小 R x C
@@ -125,7 +125,7 @@ int main(int argc, char *argv[]){
         char* slice = substring(nDNA, epoch, nDNA_slice_len);
         ErrorCheck(cudaMemcpyToSymbol(device_nDNA, slice, nDNA_slice_len + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
         //fill E vector with -∞
-        fill_array_value<<<blocks, threadsPerBlock>>>(E, INT_MIN - EXTEND_GAP + 1, nDNA_slice_len);
+        fill_array_value<<<blocks, threadsPerBlock>>>(E, 0, nDNA_slice_len);
         cudaDeviceSynchronize();
 
         
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]){
         // copy nDNA slice 到 constant memory
         ErrorCheck(cudaMemcpyToSymbol(device_nDNA, rest_slice, rest_nDNA_len + 1, 0, cudaMemcpyHostToDevice), __FILE__, __LINE__);
         //fill E vector with -∞
-        fill_array_value<<<blocks, threadsPerBlock>>>(E, INT_MIN - EXTEND_GAP + 1, nDNA_slice_len);
+        fill_array_value<<<blocks, threadsPerBlock>>>(E, 0, nDNA_slice_len);
         cudaDeviceSynchronize();
 
         // printf("新的 blocksPerGrid = %d\n", blocksPerGrid);
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]){
     // 打印執行時間
     printf("total time: %.6f seconds\n", elapsed_time);
     convert_time(elapsed_time);
-    save_experiment(argv[3], writeBlocks, writeTime, argv[4], maxScore, maxI, maxJ);
+    save_experiment(argv[3], writeBlocks, writeTime, argv[4], maxScore, maxI, maxJ, argv[1], argv[2]);
     save_result_to_file(result_position, strlen(nDNA), argv[2], false, argv[4]);
     save_result_to_file(result_position, strlen(nDNA), argv[2], true, argv[4]);
     // 釋放 cpu 記憶體空間

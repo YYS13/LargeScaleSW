@@ -261,7 +261,7 @@ int save_result_to_file(Cell* array, size_t size, char *nDNAPath, bool doLog, ch
 }
 
 
-int save_experiment(char *threads, int blocks, double time, char *expand, int maxScore, int maxI, long long maxJ){
+int save_experiment(char *threads, int blocks, double time, char *expand, int maxScore, int maxI, long long maxJ, char *mtDNA_path, char *nDNA_path){
     char filename[50] = "experiment";
     char code[7];
     snprintf(code, sizeof(code), "_%d.txt", atoi(expand));
@@ -272,7 +272,7 @@ int save_experiment(char *threads, int blocks, double time, char *expand, int ma
         return -1;  // 開檔失敗
     }
     
-    fprintf(fp, "%d Threads %d Blocks %.3f Sec Max score = %d at (%d, %lld)\n", atoi(threads), blocks, time, maxScore, maxI, maxJ);
+    fprintf(fp, "mtDNA = %s nDNA = %s \n%d Threads %d Blocks %.3f Sec Max score = %d at (%d, %lld)\n", mtDNA_path, nDNA_path, atoi(threads), blocks, time, maxScore, maxI, maxJ);
     
 
 
