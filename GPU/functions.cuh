@@ -379,7 +379,7 @@ __global__ void cal_first_phase(int outer_dig, int R,  int C, int slice_len, int
 
     if(j < 1){
         i = i - gridDim.x * R;
-        j = rest_len + j;
+        j = slice_len + j;
     }
 
 
